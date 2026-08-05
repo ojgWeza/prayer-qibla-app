@@ -37,14 +37,30 @@ is done — move it into "Done" rather than leaving it ambiguous.
       to the same tiled-background-image approach instead of the broken single-emblem
       trick.
 - [x] `CONSTITUTION.md` and `TODO.md` created to carry context across sessions
+- [x] **PR #1** (per-day/per-prayer notifications + Hijri date) merged to master
+- [x] **PR #2** (seal watermark + launcher icon) merged to master
+- [x] First-ever live run of the app, via appetize.io (no local Android SDK/emulator
+      available, and no physical device connected) — uploading the CI-built debug APK
+      to Appetize's web emulator. This surfaced two real, previously-unflagged gaps,
+      both fixed in PR #3:
+      - Qibla screen showed a bare `Icon(Icons.navigation)` instead of the ornate brass
+        astrolabe from the design mockup — that visual was never actually built in
+        Flutter, only ever existed as HTML/CSS. Replaced with a real `CustomPainter`
+        (`lib/widgets/qibla_compass.dart`): brass ring, engraved ticks, cardinal
+        letters, faint star medallion, two-tone needle.
+      - Prayer times/qibla bearing don't update if location changes after the app's
+        first GPS fix — location was only ever fetched once at startup, with no
+        continuous watch and no refresh affordance. Added pull-to-refresh on the
+        Prayer Times screen (reuses the existing `onRetryLocation` callback, now
+        properly awaitable instead of a fire-and-forget `VoidCallback`). Changing
+        location via the in-app manual city-search picker already worked correctly.
 
 ## In progress / needs attention right now 🔄
 
-- [ ] **PR #1** (`feature/per-day-prayer-notifications` → `master`) — CI build was
-      running as of the last check; merge once it's green. This PR contains the Hijri
-      date feature and the notification matrix.
 - [ ] Confirm the 7-day rolling notification schedule actually fires correctly on a
       real device (so far only verified by static analysis/tests, not a live run)
+- [ ] **PR #3** (`feature/qibla-compass-and-location-refresh` → `master`) — fixes below,
+      merge once CI is green.
 
 ## Known gaps in the design mockup (not the real app)
 
@@ -63,8 +79,11 @@ app actually does.
 ### Core features
 - [ ] **Android home screen widget** — shows the next prayer without opening the app
       (needs the `home_widget` package + a Kotlin `AppWidgetProvider` + XML layout)
-- [ ] Try the APK on an actual phone or emulator — everything so far has only been
-      confirmed via `flutter analyze`/`test`, never a live run
+- [ ] Try the APK on an actual physical phone (still only verified via `flutter
+      analyze`/`test` plus one appetize.io web-emulator run so far — no real device yet)
+- [ ] Consider continuous/background location watching instead of the current
+      fetch-once-at-startup + manual-refresh-only model, if one-shot GPS + pull-to-
+      refresh + the manual city picker turns out not to be enough in practice
 - [ ] Background rescheduling so notifications stay current even if the user doesn't
       open the app for several days (currently the 7-day window is only refreshed when
       the app is opened)
@@ -73,7 +92,9 @@ app actually does.
 - [ ] Replace AdMob test IDs with real ones (`AndroidManifest.xml` and `ad_service.dart`)
 - [ ] Create a real release **keystore/signing key** (currently signed with the debug
       key, which is not publishable)
-- [ ] Decide on a final app name + real app icon (still using `flutter create`'s default)
+- [x] Real app icon — the seal motif (ring + eight-point star), generated via
+      `flutter_launcher_icons` for legacy + adaptive icon across all densities
+- [ ] Decide on a final app name (still just "prayer_qibla" / `com.hgdroid.prayer_qibla`)
 - [ ] Write a Privacy Policy (required by Google for any app using AdMob + location)
 - [ ] Real screenshots + Play Store listing copy
 - [ ] Finalize `applicationId` (currently `com.hgdroid.prayer_qibla`)
