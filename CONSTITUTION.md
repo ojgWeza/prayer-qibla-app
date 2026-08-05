@@ -1,114 +1,149 @@
-# دستور المشروع — Prayer Qibla App
+# Project Constitution — Prayer Qibla App
 
-هذا الملف أول حاجة المفروض تتقرأ قبل أي شغل على المشروع ده. الهدف منه إننا مانعيدش اختراع
-العجلة ولا نكرر نفس الأخطاء تاني.
+Read this file first before doing any work on this project. Its purpose is to stop us
+from re-learning the same lessons or re-litigating decisions that are already settled.
 
-## 1. الهدف من التطبيق
+## 1. What this app is
 
-تطبيق أندرويد خفيف (هدف أصلي: أندرويد بس، iOS مش متأكد منه ولا متظبط) بيعمل حاجتين أساسيتين:
+A lightweight Android app (original scope: Android only — iOS is unconfirmed/unconfigured)
+that does two things:
 
-- **مواقيت الصلاة**: بالموقع الحالي (GPS) أو بمدينة يختارها المستخدم يدوياً من أي مكان في العالم.
-- **اتجاه القبلة**: بوصلة بتستخدم حساس الجهاز الحقيقي.
+- **Prayer times**: from GPS, or from any city the user picks manually.
+- **Qibla direction**: a compass using the device's real sensor.
 
-الربح عن طريق **إعلانات AdMob** فقط (مفيش اشتراكات ولا مشتريات داخل التطبيق حالياً).
-الجمهور: مصر/الوطن العربي بالدرجة الأولى + عالمي (عربي/إنجليزي).
+Monetization is **AdMob ads only** (no subscriptions, no in-app purchases for now).
+Audience: Egypt/Arab world first, global (Arabic/English) second.
 
-## 2. مبادئ أساسية (اتفقنا عليها ومتتغيرش من غير نقاش)
+## 2. Non-negotiable principles
 
-1. **كل حاجة تشتغل من غير سيرفر/باك إند من عندنا.** المواقيت والقبلة بيتحسبوا محلياً على
-   الجهاز (`adhan_dart`). الاستثناء الوحيد هو البحث عن مدينة (Nominatim API خارجي مجاني،
-   مرة واحدة وقت البحث بس، مش استخدام دوري).
-2. **مفيش تحميل Android SDK محلي على جهاز المطور.** البناء (build) بيحصل بالكامل على
-   **GitHub Actions** (`.github/workflows/build.yml`) — ده قرار متعمد عشان نوفر مساحة
-   وتعقيد على الجهاز المحلي. Flutter SDK بس محلي (`D:\dev\flutter`) لأغراض
-   `flutter analyze` / `flutter test` / تحرير الكود.
-3. **كل تعديل لازم يعدي على:**
-   - `flutter analyze` (لازم "No issues found")
-   - `dart run custom_lint` (فحص `impeccable_flutter_lints` ضد "روائح تصميم الـ AI" — لازم يطلع نضيف)
+1. **Everything runs with no backend of our own.** Prayer times and qibla are computed
+   on-device (`adhan_dart`). The one exception is manual city search, which calls the
+   free Nominatim (OpenStreetMap) API — once per search, not a recurring dependency.
+2. **No local Android SDK on the dev machine.** Builds happen entirely on
+   **GitHub Actions** (`.github/workflows/build.yml`) — a deliberate choice to avoid
+   multi-GB local installs. Only the Flutter SDK is local (`D:\dev\flutter`), for
+   `flutter analyze` / `flutter test` / editing.
+3. **Every change must pass, before it's pushed:**
+   - `flutter analyze` (must say "No issues found")
+   - `dart run custom_lint` (the `impeccable_flutter_lints` check for "AI-slop" UI
+     patterns — must come back clean)
    - `flutter test`
-   قبل ما يتعمله push. الـ CI بيشغلهم برضو، بس أرخص نكتشف المشكلة محلياً الأول.
-4. **الترجمة (AR/EN) عن طريق `lib/l10n/app_strings.dart`** — Map بسيط بدون code-gen،
-   مش `flutter gen-l10n` / ARB files. الهدف إبقاء الحجم والتعقيد صغير.
-5. **الإعدادات كلها في `SharedPreferences` عن طريق `PrefsService`** — مفيش قاعدة بيانات،
-   مفيش حاجة تتخزن على أي سيرفر.
-6. **AdMob IDs الحالية هي test IDs الرسمية من جوجل** (`ca-app-pub-3940256099942544/...`).
-   **لازم تتغير لـ IDs حقيقية قبل أي نشر فعلي على Play Store.**
-7. **Git workflow: branch منفصل لكل فيتشر جديدة** ثم merge على `master` بعد التأكد إنها
-   شغالة (قرار المستخدم بتاريخ بداية المشروع — راجعي أول ما تبدئي فيتشر جديدة).
-8. **مفيش تصميم "شكله AI" افتراضي** — ممنوع `Colors.deepPurple` seed، `Colors.black`/`white`
-   الحرفيين، تباين ضعيف، إلخ. ده اللي بيتفحصه `impeccable_flutter_lints` فعلياً.
+   CI runs these too, but catching problems locally first is cheaper.
+4. **Git workflow: one branch per feature**, merged into `master` once verified
+   (analyze/lint/test green, ideally a passing CI build on the PR). Direct commits to
+   `master` are no longer the default — this was a deliberate change the user asked for
+   partway through the project; don't revert to direct-to-master without asking again.
+5. **Translations live in `lib/l10n/app_strings.dart`** — a plain Map, no code-gen, no
+   ARB files. Keeps footprint and complexity small.
+6. **All settings live in `SharedPreferences` via `PrefsService`** — no database, no
+   server-side storage of any kind.
+7. **Current AdMob IDs are Google's official test IDs**
+   (`ca-app-pub-3940256099942544/...`). **Must be swapped for real IDs before any real
+   Play Store release.**
+8. **No default "AI-generated" look.** No `Colors.deepPurple` seed, no literal
+   `Colors.black`/`Colors.white`, no low-contrast text. This is what
+   `impeccable_flutter_lints` actually checks for — trust it.
+9. **Repo docs (this file, TODO.md, commit messages, code comments) are in English**,
+   even though the working conversation with the user happens in Egyptian Arabic. Don't
+   mix languages into project files.
 
-## 3. البنية (Architecture) باختصار
+## 3. Architecture, briefly
 
 ```
 lib/
-  main.dart                 — نقطة الدخول + MaterialApp + إدارة اللغة
-  l10n/app_strings.dart      — كل النصوص (AR/EN)
+  main.dart                 — entry point, MaterialApp, locale handling
+  l10n/app_strings.dart      — every user-facing string (AR/EN)
   services/
-    prayer_times_service.dart — حساب المواقيت والقبلة (adhan_dart)
-    location_service.dart     — GPS عن طريق geolocator
-    geocoding_service.dart    — بحث مدينة عن طريق Nominatim (OpenStreetMap)
-    notification_service.dart — جدولة تنبيهات الأذان (flutter_local_notifications)
-    date_service.dart         — تحويل هجري/ميلادي (حزمة hijri، بدون intl locale init)
-    prefs_service.dart        — كل التخزين المحلي (SharedPreferences)
-    ad_service.dart           — تهيئة AdMob
+    prayer_times_service.dart — prayer time + qibla math (adhan_dart)
+    location_service.dart     — GPS via geolocator
+    geocoding_service.dart    — manual city search via Nominatim
+    notification_service.dart — schedules adhan reminders (flutter_local_notifications)
+    date_service.dart         — Hijri/Gregorian date formatting (hijri package,
+                                 hand-rolled Gregorian names to avoid intl locale init)
+    prefs_service.dart        — all local persistence (SharedPreferences)
+    ad_service.dart           — AdMob init
   screens/
-    home_shell.dart           — الحاوية الرئيسية، فيها كل الـ state المشترك
-    prayer_times_screen.dart
+    home_shell.dart           — owns all shared state, passes it down as props
+    prayer_times_screen.dart  — includes the Hijri/Gregorian date header
     qibla_screen.dart
-    settings_screen.dart
+    settings_screen.dart      — includes the per-day/per-prayer notification grid
     city_search_screen.dart
   widgets/
     banner_ad_widget.dart
 ```
 
-`home_shell.dart` هو مركز الـ state (موقع، مواقيت، إعدادات، تنبيهات) وبيمرر كل حاجة
-كـ props للشاشات التانية. مفيش state management library خارجية (Provider/Riverpod/Bloc) —
-الحجم الحالي للتطبيق مايستحملش التعقيد ده.
+`home_shell.dart` is the single source of truth for state (location, prayer times,
+settings, notification matrix). No external state management library (Provider/Riverpod/
+Bloc) — the app isn't big enough to justify one yet.
 
-## 4. الدروس المستفادة (Learnt Lessons)
+**Design mockup:** there is a separate static HTML artifact used to iterate on visual
+design before touching Flutter code. It is NOT wired to the real app and can drift out
+of sync — see "Learnt lessons" below on how badly that drift can confuse feedback.
 
-قسم بيتحدث كل ما نتعلم حاجة جديدة أو نقع في مشكلة وناخد وقت نحلها. الهدف: منكررش نفس الغلطة.
+## 4. Learnt lessons
 
-### بناء Android (Gradle)
-- `permission_handler_android` محتاج `compileSdk = 37` — الافتراضي من Flutter (36) مش كفاية.
-- `flutter_local_notifications` محتاج `isCoreLibraryDesugaringEnabled = true` في
-  `compileOptions` + `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")`
-  في `dependencies` جوه `android/app/build.gradle.kts`.
-- لو ظهر خطأ Gradle عن compileSdk/desugaring، الحل غالباً في نفس الملف ده.
+A living log. Add to this whenever something costs real time to figure out, so the next
+session doesn't pay the same cost.
 
-### حزم خارجية (Packages) — تفاصيل غير بديهية
-- `flutter_timezone` (v5) بيرجع `TimezoneInfo` object، مش `String` — استخدمي `.identifier`.
-- حزمة `hijri`: الـ locale keys هي `'ar'` و `'en'` بالظبط (مش `'Arabic'` ولا أي حاجة تانية).
-- `adhan_dart`: الكلاس `Qibla.qibla(coordinates)` بيرجع الزاوية مباشرة، والـ `PrayerTimes`
-  بياخد `CalculationParameters` من `CalculationMethodParameters.<method>()`.
+### Android build (Gradle)
+- `permission_handler_android` needs `compileSdk = 37` — Flutter's default (36) isn't
+  enough.
+- `flutter_local_notifications` needs `isCoreLibraryDesugaringEnabled = true` in
+  `compileOptions`, plus `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")`
+  in `dependencies`, both in `android/app/build.gradle.kts`.
+- If Gradle fails complaining about compileSdk or desugaring, the fix is almost always
+  in that same file.
+
+### Third-party packages — non-obvious details
+- `flutter_timezone` (v5) returns a `TimezoneInfo` object, not a `String` — use
+  `.identifier`.
+- The `hijri` package's locale keys are exactly `'ar'` and `'en'` (not `'Arabic'` or
+  anything else).
+- `adhan_dart`: `Qibla.qibla(coordinates)` returns the bearing directly; `PrayerTimes`
+  takes `CalculationParameters` from `CalculationMethodParameters.<method>()`.
 
 ### GitHub / gh CLI
-- لو `git push` رفض تعديل على `.github/workflows/*.yml` بسبب "OAuth App... without
-  `workflow` scope"، الحل: `gh auth refresh -h github.com -s workflow` (أو اطلبي كل
-  الصلاحيات العملية دفعة واحدة من الأول: `repo,workflow,gist,read:org`).
-- لو `git push` طلع 403 لحساب غلط، شغلي `gh auth setup-git` عشان git يستخدم توكن gh
-  بدل أي credential قديم متخزن في Windows Credential Manager.
-- تحميل GitHub Actions artifacts محتاج تسجيل دخول. لو عايزة تدي حد رابط تحميل مباشر
-  بدون تسجيل دخول، اعملي **GitHub Release** وارفعي الـ APK كـ asset عليه
-  (`gh release create ... path/to.apk`).
+- If `git push` is rejected for touching `.github/workflows/*.yml` with "OAuth App...
+  without `workflow` scope", fix with `gh auth refresh -h github.com -s workflow` (or
+  request the full practical scope set up front: `repo,workflow,gist,read:org`).
+- If `git push` 403s under the wrong account, run `gh auth setup-git` so git uses the
+  gh-managed token instead of a stale credential in Windows Credential Manager.
+- Downloading GitHub Actions artifacts requires being logged in. To hand someone a
+  no-login direct download link, cut a **GitHub Release** and attach the APK as an
+  asset (`gh release create ... path/to.apk`).
 
-### صور خارجية / تصميم
-- **افحصي أي صورة بعينك (أداة Read) قبل ما تستخدميها** — وصف WebFetch النصي للصورة
-  مش موثوق لتقييم الزاوية/الإطار (اتغلطنا في صورة بوصلة كانت لقطة جانبية لفاترينة متحف
-  كاملة بدل ما تكون وش البوصلة لوحدها).
-- لو مفيش أداة موثوقة لمعاينة CSS/HTML بصرياً في الجلسة، **متدّعيش إنك شفتي النتيجة** —
-  قولي بوضوح إنك مش قادرة تتأكد بعينك واعتمدي على فيدباك المستخدم المباشر.
-- زخرفة النجمة الثمانية (`.star8`) بتتعمل بمربعين متراكبين (واحد مدوّر 45 درجة) — أسهل
-  طريقة تعمل بيها شكل إسلامي هندسي بـ CSS خالص بدون صور أو SVG معقد.
+### External images / design assets
+- **Look at any candidate image yourself (Read tool) before using it.** A text-based
+  WebFetch description of an image is not reliable for judging framing/angle — we once
+  used what turned out to be a full museum display-case photo instead of a clean face-on
+  shot of the object, because the text description didn't say so.
+- In the end, real photos were dropped entirely for the compass graphic in favor of a
+  flat CSS treatment, to stay visually consistent with the rest of the (flat, Material)
+  UI. An ornate/photographic element next to flat cards read as mismatched, not "richer."
+- The eight-point star motif (`.star8`) is just two overlapping squares, one rotated
+  45°, with a border instead of a fill. Cheapest way to get an authentic Islamic
+  geometric mark without an image or hand-authored SVG path.
+- **When feedback says "use X as the background", confirm background of *what*.** We
+  once applied a requested background texture to the mockup *artifact's own page
+  wrapper* when the user meant the real app's background — the artifact page chrome and
+  the thing being designed are two different surfaces, and it is easy to conflate them.
+  Ask, or default to applying visual changes to the artifact's simulated phone screens
+  (the actual design surface), not the page around them.
+- **Keep the mockup in sync with real app features, or say explicitly that it's
+  behind.** We implemented the Hijri/Gregorian date header in the real Flutter code
+  (`prayer_times_screen.dart`) but forgot to reflect it in the separate HTML mockup,
+  which caused the user to think the feature had been dropped. The mockup and the real
+  app are two independent files — a change to one does not propagate to the other.
 
-### أدوات الجلسة (Claude Code environment)
-- أداة الـ Browser الداخلية كانت متعطلة في الجلسة دي ("Browser pane is not displayed") —
-  متعتمديش عليها للتحقق الذاتي، اعتمدي على فحص الملفات مباشرة (فك base64، عد الـ divs، إلخ).
-- بايثون مش متاح في الـ shell — استخدمي PowerShell (`Add-Type -AssemblyName System.Drawing`)
-  لأي تعديل صور (قص/تصغير/ضغط).
+### This session's tooling
+- The in-session Browser tool was non-functional this session ("Browser pane is not
+  displayed"). Don't rely on it for self-verification — inspect files directly instead
+  (decode base64, count divs, etc.), and say plainly when you can't visually confirm
+  something rather than implying you did.
+- Python isn't available in this shell. Use PowerShell
+  (`Add-Type -AssemblyName System.Drawing`) for any image crop/resize/compress work.
 
-## 5. حاجات لسه ماتقررناش فيها نهائياً
+## 5. Open decisions
 
-- هل هنعمل iOS فعلاً ولا نركز أندرويد بس؟ (الأصل كان أندرويد بس)
-- هل هنحتاج backend في المستقبل (زي لو ضفنا مزامنة سحابية)؟ — لغاية دلوقتي الإجابة لأ.
+- Are we actually building iOS, or is this Android-only? (Original scope: Android only.)
+- Will we ever need a backend (e.g. for cloud sync)? No, as of now.
