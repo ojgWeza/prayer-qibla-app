@@ -75,6 +75,21 @@ is done — move it into "Done" rather than leaving it ambiguous.
       prayer times populate with the Hijri header, and the AdMob test banner loads.
       Also discovered along the way: the device's Location Services toggle was off
       system-wide, which is why no permission dialog ever appeared — not an app bug.
+- [x] **PR #5**: fixed prayer times displaying in UTC instead of local time. Found live
+      on the same Mi 10 (Cairo): Fajr showed 01:37 instead of the correct ~03:37, every
+      one of the 6 times off by exactly the local UTC offset. `adhan_dart` returns
+      UTC-flagged `DateTime`s; `computePrayerTimes()` now calls `.toLocal()` before
+      returning them. See `CONSTITUTION.md` § Learnt lessons for the full root cause.
+- [x] Added a **12-hour/24-hour time format toggle** to Settings (persisted via
+      `PrefsService`, defaults to 24-hour — no behavior change for existing installs).
+- [x] **Removed the per-day/per-prayer notification-muting UI** (the 7-day-chips-per-
+      prayer grid in Settings, plus its `PrefsService` persistence) — grouped by
+      *prayer* with days underneath, which the user now wants inverted (grouped by
+      *day*, prayers underneath). Rather than leave the soon-to-be-replaced UI in place,
+      it was deleted outright; see the redesign task below and
+      `CONSTITUTION.md` § 6 for the full decision record. Notifications currently fire
+      for all 5 notifiable prayers unconditionally in the meantime (no muting at all
+      until the redesign lands).
 
 ## In progress / needs attention right now 🔄
 
@@ -90,7 +105,6 @@ visual direction, but it is a hand-maintained file that does **not** automatical
 the real Flutter code. As of now it is missing:
 
 - [ ] The Hijri/Gregorian date header (implemented in the real app, not in the mockup)
-- [ ] The per-day/per-prayer notification grid in the settings screen preview
 
 If the mockup is picked up again, sync these first so it doesn't misrepresent what the
 app actually does.
@@ -98,6 +112,15 @@ app actually does.
 ## Not started yet 📋
 
 ### Core features
+- [ ] **Redesign per-day/per-prayer notification muting, day-categorized.** The removed
+      UI (see Done ✅) grouped by *prayer*, with 7 day-toggles underneath each one.
+      Rebuild it inverted: each **day** as the top-level group, with the (5) prayers
+      listed underneath that day to toggle individually — this is what the user
+      explicitly asked for. Needs: new Settings UI shape, and `PrefsService` persistence
+      to match (the old `notif_${weekday}_$prayer` key scheme still works fine for the
+      new shape, just the UI grouping changes — no need to redesign storage, only
+      display). Wire back into `home_shell.dart`'s `scheduleUpcoming(isEnabled: ...)`,
+      which currently just returns `true` unconditionally.
 - [ ] **Android home screen widget** — shows the next prayer without opening the app
       (needs the `home_widget` package + a Kotlin `AppWidgetProvider` + XML layout)
 - [ ] Consider continuous/background location watching instead of the current

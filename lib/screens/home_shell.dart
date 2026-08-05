@@ -41,7 +41,6 @@ class _HomeShellState extends State<HomeShell> {
   bool _use24HourFormat = true;
   String _calculationMethod = 'egyptian';
   String _madhab = 'shafi';
-  Map<int, Map<String, bool>> _notificationMatrix = {};
 
   @override
   void initState() {
@@ -54,7 +53,6 @@ class _HomeShellState extends State<HomeShell> {
     _use24HourFormat = await _prefs.getUse24HourFormat();
     _calculationMethod = await _prefs.getCalculationMethod();
     _madhab = await _prefs.getMadhab();
-    _notificationMatrix = await _prefs.getNotificationMatrix();
     if (mounted) {
       widget.onLocaleChanged(Locale(_language));
       setState(() {});
@@ -112,8 +110,9 @@ class _HomeShellState extends State<HomeShell> {
 
     _notificationService.scheduleUpcoming(
       upcomingDays,
-      isEnabled: (weekday, prayer) =>
-          _notificationMatrix[weekday]?[prayer] ?? true,
+      // Per-day/per-prayer muting was removed pending a redesign (see
+      // TODO.md) -- every notifiable prayer fires for now.
+      isEnabled: (weekday, prayer) => true,
       labelFor: (key) => AppStrings.forLanguage(_language, key),
     );
   }
@@ -168,22 +167,6 @@ class _HomeShellState extends State<HomeShell> {
     _recomputeTimesAndQibla();
   }
 
-  Future<void> _onNotificationToggled(
-    int weekday,
-    String prayer,
-    bool enabled,
-  ) async {
-    setState(() {
-      final dayMap = Map<String, bool>.from(
-        _notificationMatrix[weekday] ?? {},
-      );
-      dayMap[prayer] = enabled;
-      _notificationMatrix = {..._notificationMatrix, weekday: dayMap};
-    });
-    await _prefs.setNotificationEnabled(weekday, prayer, enabled);
-    _recomputeTimesAndQibla();
-  }
-
   @override
   Widget build(BuildContext context) {
     final locationLabel = _manualLocationName ??
@@ -207,13 +190,11 @@ class _HomeShellState extends State<HomeShell> {
         use24HourFormat: _use24HourFormat,
         calculationMethod: _calculationMethod,
         madhab: _madhab,
-        notificationMatrix: _notificationMatrix,
         locationLabel: locationLabel,
         onLanguageChanged: _onLanguageChanged,
         onTimeFormatChanged: _onTimeFormatChanged,
         onCalculationMethodChanged: _onCalculationMethodChanged,
         onMadhabChanged: _onMadhabChanged,
-        onNotificationToggled: _onNotificationToggled,
         onChangeLocation: _openLocationPicker,
       ),
     ];
