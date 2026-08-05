@@ -1,30 +1,46 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Unit tests for the pure calculation/translation logic. Widget tests are
+// intentionally avoided here since the app initializes location, notification
+// and ads plugins on startup that aren't available in the test environment.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:prayer_qibla/main.dart';
+import 'package:prayer_qibla/l10n/app_strings.dart';
+import 'package:prayer_qibla/services/prayer_times_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('AppStrings', () {
+    test('returns Arabic and English strings for a known key', () {
+      expect(AppStrings.forLanguage('ar', 'fajr'), 'الفجر');
+      expect(AppStrings.forLanguage('en', 'fajr'), 'Fajr');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('falls back to the key itself when missing', () {
+      expect(AppStrings.forLanguage('en', 'not_a_real_key'), 'not_a_real_key');
+    });
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  group('computeQiblaBearing', () {
+    test('matches the reference example from the adhan library', () {
+      final bearing =
+          computeQiblaBearing(latitude: -39.231, longitude: 12.412);
+      expect(bearing, closeTo(28.016, 0.01));
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('computePrayerTimes', () {
+    test('returns the 6 daily times in chronological order for Cairo', () {
+      final times = computePrayerTimes(
+        latitude: 30.0444,
+        longitude: 31.2357,
+        date: DateTime(2026, 6, 1),
+        methodKey: 'egyptian',
+        madhabKey: 'shafi',
+      );
+
+      expect(times.fajr.isBefore(times.sunrise), isTrue);
+      expect(times.sunrise.isBefore(times.dhuhr), isTrue);
+      expect(times.dhuhr.isBefore(times.asr), isTrue);
+      expect(times.asr.isBefore(times.maghrib), isTrue);
+      expect(times.maghrib.isBefore(times.isha), isTrue);
+    });
   });
 }
