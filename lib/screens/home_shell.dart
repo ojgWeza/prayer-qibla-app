@@ -6,6 +6,7 @@ import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/prayer_times_service.dart';
 import '../services/prefs_service.dart';
+import '../services/widget_service.dart';
 import '../widgets/star_watermark.dart';
 import 'city_search_screen.dart';
 import 'prayer_times_screen.dart';
@@ -115,6 +116,12 @@ class _HomeShellState extends State<HomeShell> {
       isEnabled: (weekday, prayer) => true,
       labelFor: (key) => AppStrings.forLanguage(_language, key),
     );
+
+    updateNextPrayerWidget(
+      upcomingDays: upcomingDays,
+      language: _language,
+      use24HourFormat: _use24HourFormat,
+    );
   }
 
   Future<void> _openLocationPicker() async {
@@ -153,6 +160,7 @@ class _HomeShellState extends State<HomeShell> {
   void _onTimeFormatChanged(bool use24Hour) {
     setState(() => _use24HourFormat = use24Hour);
     _prefs.setUse24HourFormat(use24Hour);
+    _recomputeTimesAndQibla();
   }
 
   void _onCalculationMethodChanged(String method) {

@@ -48,6 +48,7 @@ dependencies:
   intl: any
   http: ^1.6.0
   hijri: ^3.0.1
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:
