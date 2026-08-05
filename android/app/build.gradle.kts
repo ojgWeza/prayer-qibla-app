@@ -33,6 +33,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // R8 minification (on by default for release in recent Flutter/AGP
+            // versions) strips/renames classes androidx.work's WorkManager needs
+            // via reflection to build its Room database, crashing on startup
+            // with "Failed to create an instance of WorkDatabase" before Flutter
+            // even starts. Disabling it until proper keep rules are in place.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
