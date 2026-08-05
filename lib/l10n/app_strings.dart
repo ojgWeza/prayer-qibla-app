@@ -56,6 +56,18 @@ class AppStrings {
       'ar': 'فشل البحث، تأكد من اتصال الإنترنت',
       'en': 'Search failed, check your internet connection',
     },
+    // Short weekday abbreviations, keyed by DateTime.weekday (1=Mon..7=Sun).
+    'day1': {'ar': 'اث', 'en': 'Mo'},
+    'day2': {'ar': 'ثل', 'en': 'Tu'},
+    'day3': {'ar': 'أر', 'en': 'We'},
+    'day4': {'ar': 'خم', 'en': 'Th'},
+    'day5': {'ar': 'جم', 'en': 'Fr'},
+    'day6': {'ar': 'سب', 'en': 'Sa'},
+    'day7': {'ar': 'أح', 'en': 'Su'},
+    'notificationsHint': {
+      'ar': 'دوسي على أي يوم تحت اسم الصلاة عشان تشغلي أو توقفي تنبيهها في اليوم ده بس',
+      'en': 'Tap a day under a prayer to toggle its alert for that day only',
+    },
     'manualLocationNote': {
       'ar': 'البحث محتاج إنترنت مرة واحدة بس، بعدها المواقيت بتتحسب في الجهاز بدون نت',
       'en': 'Searching needs internet once — after that, times are computed fully offline',
