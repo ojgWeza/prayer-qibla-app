@@ -6,6 +6,7 @@ import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/prayer_times_service.dart';
 import '../services/prefs_service.dart';
+import '../widgets/star_watermark.dart';
 import 'city_search_screen.dart';
 import 'prayer_times_screen.dart';
 import 'qibla_screen.dart';
@@ -246,7 +247,12 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      body: IndexedStack(index: _tabIndex, children: screens),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: StarWatermark()),
+          IndexedStack(index: _tabIndex, children: screens),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (i) => setState(() => _tabIndex = i),

@@ -28,6 +28,14 @@ is done — move it into "Done" rather than leaving it ambiguous.
       request)
 - [x] Static HTML design mockup for prayer times / qibla / settings screens + a home
       screen widget preview
+- [x] Subtle eight-point-star watermark as a background texture, tiled small across
+      the whole screen (`lib/widgets/star_watermark.dart`, wired into the `HomeShell`
+      Scaffold body behind the tab content) — matches the mockup's page-background
+      treatment. The mockup itself also had a bug where its per-screen watermark
+      silently failed to render (a `z-index: -1` span escaping its ancestor's stacking
+      context because `.screen` never established one); fixed by switching the mockup
+      to the same tiled-background-image approach instead of the broken single-emblem
+      trick.
 - [x] `CONSTITUTION.md` and `TODO.md` created to carry context across sessions
 
 ## In progress / needs attention right now 🔄
@@ -55,9 +63,6 @@ app actually does.
 ### Core features
 - [ ] **Android home screen widget** — shows the next prayer without opening the app
       (needs the `home_widget` package + a Kotlin `AppWidgetProvider` + XML layout)
-- [ ] Subtle eight-point-star watermark as a background texture **in the real app**
-      (Scaffold background), matching the treatment already applied to the mockup's
-      page background — this was requested for the app itself, not just the preview
 - [ ] Try the APK on an actual phone or emulator — everything so far has only been
       confirmed via `flutter analyze`/`test`, never a live run
 - [ ] Background rescheduling so notifications stay current even if the user doesn't
