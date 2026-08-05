@@ -69,13 +69,16 @@ DailyPrayerTimes computePrayerTimes({
     coordinates: coordinates,
     calculationParameters: params,
   );
+  // adhan_dart returns UTC-flagged DateTimes (see its TimeComponents.dart);
+  // convert to local so displaying .hour/.minute shows the actual local
+  // prayer time instead of the UTC hour mislabeled as local.
   return DailyPrayerTimes(
-    fajr: times.fajr,
-    sunrise: times.sunrise,
-    dhuhr: times.dhuhr,
-    asr: times.asr,
-    maghrib: times.maghrib,
-    isha: times.isha,
+    fajr: times.fajr.toLocal(),
+    sunrise: times.sunrise.toLocal(),
+    dhuhr: times.dhuhr.toLocal(),
+    asr: times.asr.toLocal(),
+    maghrib: times.maghrib.toLocal(),
+    isha: times.isha.toLocal(),
   );
 }
 

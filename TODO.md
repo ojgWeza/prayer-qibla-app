@@ -54,13 +54,34 @@ is done — move it into "Done" rather than leaving it ambiguous.
         Prayer Times screen (reuses the existing `onRetryLocation` callback, now
         properly awaitable instead of a fire-and-forget `VoidCallback`). Changing
         location via the in-app manual city-search picker already worked correctly.
+- [x] **Found and fixed the real "crashes on startup" bug**, root-caused via an actual
+      crash log (not guessing) captured on a physical device (Xiaomi Mi 10, Android 13)
+      connected over wireless `adb` — no local Android SDK/emulator, so `platform-tools`
+      was fetched standalone to `D:\dev\platform-tools` for this. The release APK was
+      hard-crashing before Flutter/Dart even started:
+      `Failed to create an instance of androidx.work.impl.WorkDatabase` inside
+      `androidx.startup.InitializationProvider`. The obfuscated frame names in the trace
+      (`a2.n`, `c4.b`, tagged `r8-map-id-...`) showed R8 minification silently running on
+      release builds (recent Flutter/AGP default, despite no explicit `isMinifyEnabled`
+      in this project) and stripping/renaming something WorkManager needs via
+      reflection. Fixed by explicitly setting `isMinifyEnabled = false` /
+      `isShrinkResources = false` for the release build type
+      (`android/app/build.gradle.kts`).
+- [x] **Verified the fix end-to-end on the real Mi 10**: installed the new release APK
+      (had to `adb uninstall` first — every CI run signs with a fresh ephemeral debug
+      keystore, so signatures don't match between builds until a real release keystore
+      exists), launched it, no crash. Confirmed live on-device: the seal watermark tiles
+      correctly in the background, the real qibla compass renders and points correctly,
+      prayer times populate with the Hijri header, and the AdMob test banner loads.
+      Also discovered along the way: the device's Location Services toggle was off
+      system-wide, which is why no permission dialog ever appeared — not an app bug.
 
 ## In progress / needs attention right now 🔄
 
 - [ ] Confirm the 7-day rolling notification schedule actually fires correctly on a
       real device (so far only verified by static analysis/tests, not a live run)
-- [ ] **PR #3** (`feature/qibla-compass-and-location-refresh` → `master`) — fixes below,
-      merge once CI is green.
+- [ ] Re-test pull-to-refresh on the Prayer Times screen actually recomputes times after
+      a real location change on-device (added in PR #3, not yet exercised live)
 
 ## Known gaps in the design mockup (not the real app)
 
@@ -79,8 +100,6 @@ app actually does.
 ### Core features
 - [ ] **Android home screen widget** — shows the next prayer without opening the app
       (needs the `home_widget` package + a Kotlin `AppWidgetProvider` + XML layout)
-- [ ] Try the APK on an actual physical phone (still only verified via `flutter
-      analyze`/`test` plus one appetize.io web-emulator run so far — no real device yet)
 - [ ] Consider continuous/background location watching instead of the current
       fetch-once-at-startup + manual-refresh-only model, if one-shot GPS + pull-to-
       refresh + the manual city picker turns out not to be enough in practice
@@ -89,6 +108,10 @@ app actually does.
       the app is opened)
 
 ### Before any real Play Store release
+- [ ] Re-enable R8 minification with proper keep rules for WorkManager/Room (and
+      anything else reflection-based) rather than leaving it off forever — it's
+      currently disabled as the fix for the startup crash (see Done ✅), which is safe
+      but leaves the release APK larger than it needs to be
 - [ ] Replace AdMob test IDs with real ones (`AndroidManifest.xml` and `ad_service.dart`)
 - [ ] Create a real release **keystore/signing key** (currently signed with the debug
       key, which is not publishable)

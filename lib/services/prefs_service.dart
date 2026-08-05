@@ -6,6 +6,7 @@ import 'prayer_times_service.dart' show notifiablePrayers;
 /// app persists locally (no backend, everything stays on-device).
 class PrefsService {
   static const _keyLanguage = 'language_code';
+  static const _keyUse24HourFormat = 'use_24_hour_format';
   static const _keyCalculationMethod = 'calculation_method';
   static const _keyMadhab = 'madhab';
   static const _keyManualLat = 'manual_location_lat';
@@ -19,6 +20,12 @@ class PrefsService {
 
   Future<void> setLanguage(String code) async =>
       (await _prefs).setString(_keyLanguage, code);
+
+  Future<bool> getUse24HourFormat() async =>
+      (await _prefs).getBool(_keyUse24HourFormat) ?? true;
+
+  Future<void> setUse24HourFormat(bool use24Hour) async =>
+      (await _prefs).setBool(_keyUse24HourFormat, use24Hour);
 
   Future<String> getCalculationMethod() async =>
       (await _prefs).getString(_keyCalculationMethod) ?? 'egyptian';
