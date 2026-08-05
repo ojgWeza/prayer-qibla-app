@@ -1,7 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'prayer_times_service.dart' show notifiablePrayers;
-
 /// Thin wrapper around SharedPreferences for the handful of settings this
 /// app persists locally (no backend, everything stays on-device).
 class PrefsService {
@@ -38,32 +36,6 @@ class PrefsService {
 
   Future<void> setMadhab(String madhab) async =>
       (await _prefs).setString(_keyMadhab, madhab);
-
-  static String _notifKey(int weekday, String prayer) => 'notif_${weekday}_$prayer';
-
-  /// Per-day, per-prayer notification toggles. Weekdays follow
-  /// DateTime.weekday (Monday = 1 .. Sunday = 7); every combination
-  /// defaults to enabled. This lets someone mute, say, Friday Dhuhr
-  /// (they go to the mosque instead) without touching any other alert.
-  Future<Map<int, Map<String, bool>>> getNotificationMatrix() async {
-    final prefs = await _prefs;
-    return {
-      for (var weekday = 1; weekday <= 7; weekday++)
-        weekday: {
-          for (final prayer in notifiablePrayers)
-            prayer: prefs.getBool(_notifKey(weekday, prayer)) ?? true,
-        },
-    };
-  }
-
-  Future<void> setNotificationEnabled(
-    int weekday,
-    String prayer,
-    bool enabled,
-  ) async {
-    final prefs = await _prefs;
-    await prefs.setBool(_notifKey(weekday, prayer), enabled);
-  }
 
   /// A manually picked city overrides GPS location until cleared.
   Future<ManualLocation?> getManualLocation() async {
