@@ -12,7 +12,7 @@ class PrayerTimesScreen extends StatefulWidget {
   final LocationState locationState;
   final DailyPrayerTimes? times;
   final String language;
-  final VoidCallback onRetryLocation;
+  final Future<void> Function() onRetryLocation;
 
   const PrayerTimesScreen({
     super.key,
@@ -81,21 +81,24 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     return Column(
       children: [
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _DateHeader(
-                gregorian: formatGregorian(today, widget.language),
-                hijri: formatHijri(today, widget.language),
-              ),
-              const SizedBox(height: 4),
-              for (final entry in times.ordered)
-                _PrayerRow(
-                  label: AppStrings.of(context, entry.key),
-                  time: entry.value,
-                  highlighted: entry.key == nextKey,
+          child: RefreshIndicator(
+            onRefresh: widget.onRetryLocation,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _DateHeader(
+                  gregorian: formatGregorian(today, widget.language),
+                  hijri: formatHijri(today, widget.language),
                 ),
-            ],
+                const SizedBox(height: 4),
+                for (final entry in times.ordered)
+                  _PrayerRow(
+                    label: AppStrings.of(context, entry.key),
+                    time: entry.value,
+                    highlighted: entry.key == nextKey,
+                  ),
+              ],
+            ),
           ),
         ),
         const SafeArea(top: false, child: BannerAdWidget()),

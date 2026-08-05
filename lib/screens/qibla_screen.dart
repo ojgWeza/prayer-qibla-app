@@ -6,11 +6,12 @@ import 'package:flutter_compass/flutter_compass.dart';
 import '../l10n/app_strings.dart';
 import '../services/location_service.dart';
 import '../widgets/banner_ad_widget.dart';
+import '../widgets/qibla_compass.dart';
 
 class QiblaScreen extends StatelessWidget {
   final LocationState locationState;
   final double? qiblaBearing;
-  final VoidCallback onRetryLocation;
+  final Future<void> Function() onRetryLocation;
 
   const QiblaScreen({
     super.key,
@@ -81,14 +82,7 @@ class QiblaScreen extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 24),
-                    Transform.rotate(
-                      angle: angle,
-                      child: Icon(
-                        Icons.navigation,
-                        size: 160,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
+                    QiblaCompass(angle: angle),
                     const SizedBox(height: 24),
                     Text('${qiblaBearing!.toStringAsFixed(0)}°'),
                     const SizedBox(height: 12),
