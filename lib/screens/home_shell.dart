@@ -38,6 +38,7 @@ class _HomeShellState extends State<HomeShell> {
   String? _manualLocationName;
 
   String _language = 'ar';
+  bool _use24HourFormat = true;
   String _calculationMethod = 'egyptian';
   String _madhab = 'shafi';
   Map<int, Map<String, bool>> _notificationMatrix = {};
@@ -50,6 +51,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _bootstrap() async {
     _language = await _prefs.getLanguage();
+    _use24HourFormat = await _prefs.getUse24HourFormat();
     _calculationMethod = await _prefs.getCalculationMethod();
     _madhab = await _prefs.getMadhab();
     _notificationMatrix = await _prefs.getNotificationMatrix();
@@ -149,6 +151,11 @@ class _HomeShellState extends State<HomeShell> {
     _recomputeTimesAndQibla();
   }
 
+  void _onTimeFormatChanged(bool use24Hour) {
+    setState(() => _use24HourFormat = use24Hour);
+    _prefs.setUse24HourFormat(use24Hour);
+  }
+
   void _onCalculationMethodChanged(String method) {
     setState(() => _calculationMethod = method);
     _prefs.setCalculationMethod(method);
@@ -187,6 +194,7 @@ class _HomeShellState extends State<HomeShell> {
         locationState: _locationState,
         times: _prayerTimes,
         language: _language,
+        use24HourFormat: _use24HourFormat,
         onRetryLocation: _refreshLocation,
       ),
       QiblaScreen(
@@ -196,11 +204,13 @@ class _HomeShellState extends State<HomeShell> {
       ),
       SettingsScreen(
         language: _language,
+        use24HourFormat: _use24HourFormat,
         calculationMethod: _calculationMethod,
         madhab: _madhab,
         notificationMatrix: _notificationMatrix,
         locationLabel: locationLabel,
         onLanguageChanged: _onLanguageChanged,
+        onTimeFormatChanged: _onTimeFormatChanged,
         onCalculationMethodChanged: _onCalculationMethodChanged,
         onMadhabChanged: _onMadhabChanged,
         onNotificationToggled: _onNotificationToggled,

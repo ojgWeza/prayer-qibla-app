@@ -5,11 +5,13 @@ import '../services/prayer_times_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   final String language;
+  final bool use24HourFormat;
   final String calculationMethod;
   final String madhab;
   final Map<int, Map<String, bool>> notificationMatrix;
   final String locationLabel;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<bool> onTimeFormatChanged;
   final ValueChanged<String> onCalculationMethodChanged;
   final ValueChanged<String> onMadhabChanged;
   final void Function(int weekday, String prayer, bool enabled)
@@ -19,11 +21,13 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
     required this.language,
+    required this.use24HourFormat,
     required this.calculationMethod,
     required this.madhab,
     required this.notificationMatrix,
     required this.locationLabel,
     required this.onLanguageChanged,
+    required this.onTimeFormatChanged,
     required this.onCalculationMethodChanged,
     required this.onMadhabChanged,
     required this.onNotificationToggled,
@@ -53,6 +57,24 @@ class SettingsScreen extends StatelessWidget {
             ],
             selected: {language},
             onSelectionChanged: (s) => onLanguageChanged(s.first),
+          ),
+        ),
+        const Divider(),
+        ListTile(
+          title: Text(AppStrings.of(context, 'timeFormat')),
+          trailing: SegmentedButton<bool>(
+            segments: [
+              ButtonSegment(
+                value: true,
+                label: Text(AppStrings.of(context, 'timeFormat24')),
+              ),
+              ButtonSegment(
+                value: false,
+                label: Text(AppStrings.of(context, 'timeFormat12')),
+              ),
+            ],
+            selected: {use24HourFormat},
+            onSelectionChanged: (s) => onTimeFormatChanged(s.first),
           ),
         ),
         const Divider(),

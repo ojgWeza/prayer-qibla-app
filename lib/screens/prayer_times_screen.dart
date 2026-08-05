@@ -12,6 +12,7 @@ class PrayerTimesScreen extends StatefulWidget {
   final LocationState locationState;
   final DailyPrayerTimes? times;
   final String language;
+  final bool use24HourFormat;
   final Future<void> Function() onRetryLocation;
 
   const PrayerTimesScreen({
@@ -19,6 +20,7 @@ class PrayerTimesScreen extends StatefulWidget {
     required this.locationState,
     required this.times,
     required this.language,
+    required this.use24HourFormat,
     required this.onRetryLocation,
   });
 
@@ -96,6 +98,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                     label: AppStrings.of(context, entry.key),
                     time: entry.value,
                     highlighted: entry.key == nextKey,
+                    use24HourFormat: widget.use24HourFormat,
                   ),
               ],
             ),
@@ -133,21 +136,31 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
+int _hour12(int hour24) {
+  final h = hour24 % 12;
+  return h == 0 ? 12 : h;
+}
+
 class _PrayerRow extends StatelessWidget {
   final String label;
   final DateTime time;
   final bool highlighted;
+  final bool use24HourFormat;
 
   const _PrayerRow({
     required this.label,
     required this.time,
     required this.highlighted,
+    required this.use24HourFormat,
   });
 
   @override
   Widget build(BuildContext context) {
-    final timeStr =
-        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final minuteStr = time.minute.toString().padLeft(2, '0');
+    final timeStr = use24HourFormat
+        ? '${time.hour.toString().padLeft(2, '0')}:$minuteStr'
+        : '${_hour12(time.hour)}:$minuteStr '
+            '${AppStrings.of(context, time.hour < 12 ? 'am' : 'pm')}';
     final theme = Theme.of(context);
     return Card(
       color: highlighted ? theme.colorScheme.primaryContainer : null,
