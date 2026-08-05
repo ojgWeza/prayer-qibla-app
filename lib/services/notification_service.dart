@@ -37,10 +37,19 @@ class NotificationService {
 
   Future<void> cancelAll() => _plugin.cancelAll();
 
-  /// Schedules today's remaining prayer notifications. Called on app start
-  /// and whenever settings/location change; past prayers for today are skipped.
-  Future<void> scheduleForToday(
-    DailyPrayerTimes times, {
+  /// Schedules prayer notifications for a rolling window of days (today
+  /// plus however many are passed in [upcomingDays]), skipping any prayer
+  /// whose weekday+prayer combination [isEnabled] says is muted, and any
+  /// time already in the past. Prayer times drift by a few minutes daily,
+  /// so each day is scheduled with its own freshly-computed time rather
+  /// than relying on a fixed weekly-recurring alarm.
+  ///
+  /// Called on app start and whenever settings/location change; reopening
+  /// the app re-derives this window, which is what keeps it current even
+  /// though nothing runs in the background between opens.
+  Future<void> scheduleUpcoming(
+    List<DailyPrayerTimes> upcomingDays, {
+    required bool Function(int weekday, String prayerKey) isEnabled,
     required String Function(String prayerKey) labelFor,
   }) async {
     await cancelAll();
@@ -58,18 +67,22 @@ class NotificationService {
     );
 
     var id = 0;
-    for (final entry in times.ordered) {
-      if (entry.key == 'sunrise') continue;
-      final scheduled = tz.TZDateTime.from(entry.value, tz.local);
-      if (scheduled.isBefore(now)) continue;
-      await _plugin.zonedSchedule(
-        id: id++,
-        scheduledDate: scheduled,
-        title: labelFor(entry.key),
-        body: labelFor(entry.key),
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      );
+    for (final times in upcomingDays) {
+      final weekday = times.fajr.weekday;
+      for (final entry in times.ordered) {
+        if (!notifiablePrayers.contains(entry.key)) continue;
+        if (!isEnabled(weekday, entry.key)) continue;
+        final scheduled = tz.TZDateTime.from(entry.value, tz.local);
+        if (scheduled.isBefore(now)) continue;
+        await _plugin.zonedSchedule(
+          id: id++,
+          scheduledDate: scheduled,
+          title: labelFor(entry.key),
+          body: labelFor(entry.key),
+          notificationDetails: details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+      }
     }
   }
 }

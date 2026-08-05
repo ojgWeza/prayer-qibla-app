@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import '../services/date_service.dart';
 import '../services/location_service.dart';
 import '../services/prayer_times_service.dart';
 import '../widgets/banner_ad_widget.dart';
@@ -10,12 +11,14 @@ import '../widgets/banner_ad_widget.dart';
 class PrayerTimesScreen extends StatefulWidget {
   final LocationState locationState;
   final DailyPrayerTimes? times;
+  final String language;
   final VoidCallback onRetryLocation;
 
   const PrayerTimesScreen({
     super.key,
     required this.locationState,
     required this.times,
+    required this.language,
     required this.onRetryLocation,
   });
 
@@ -73,6 +76,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     }
 
     final nextKey = _nextPrayerKey(times);
+    final today = DateTime.now();
 
     return Column(
       children: [
@@ -80,6 +84,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              _DateHeader(
+                gregorian: formatGregorian(today, widget.language),
+                hijri: formatHijri(today, widget.language),
+              ),
+              const SizedBox(height: 4),
               for (final entry in times.ordered)
                 _PrayerRow(
                   label: AppStrings.of(context, entry.key),
@@ -91,6 +100,32 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         ),
         const SafeArea(top: false, child: BannerAdWidget()),
       ],
+    );
+  }
+}
+
+class _DateHeader extends StatelessWidget {
+  final String gregorian;
+  final String hijri;
+
+  const _DateHeader({required this.gregorian, required this.hijri});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(gregorian, style: theme.textTheme.titleSmall),
+          Text(
+            hijri,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+        ],
+      ),
     );
   }
 }

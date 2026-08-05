@@ -39,7 +39,7 @@ class _HomeShellState extends State<HomeShell> {
   String _language = 'ar';
   String _calculationMethod = 'egyptian';
   String _madhab = 'shafi';
-  bool _notificationsEnabled = true;
+  Map<int, Map<String, bool>> _notificationMatrix = {};
 
   @override
   void initState() {
@@ -51,16 +51,14 @@ class _HomeShellState extends State<HomeShell> {
     _language = await _prefs.getLanguage();
     _calculationMethod = await _prefs.getCalculationMethod();
     _madhab = await _prefs.getMadhab();
-    _notificationsEnabled = await _prefs.getNotificationsEnabled();
+    _notificationMatrix = await _prefs.getNotificationMatrix();
     if (mounted) {
       widget.onLocaleChanged(Locale(_language));
       setState(() {});
     }
 
     await _notificationService.init();
-    if (_notificationsEnabled) {
-      await _notificationService.requestPermission();
-    }
+    await _notificationService.requestPermission();
 
     final manual = await _prefs.getManualLocation();
     if (manual != null) {
@@ -91,28 +89,30 @@ class _HomeShellState extends State<HomeShell> {
     final lng = _longitude;
     if (lat == null || lng == null) return;
 
-    final times = computePrayerTimes(
-      latitude: lat,
-      longitude: lng,
-      date: DateTime.now(),
-      methodKey: _calculationMethod,
-      madhabKey: _madhab,
-    );
+    final today = DateTime.now();
+    final upcomingDays = [
+      for (var offset = 0; offset < 7; offset++)
+        computePrayerTimes(
+          latitude: lat,
+          longitude: lng,
+          date: today.add(Duration(days: offset)),
+          methodKey: _calculationMethod,
+          madhabKey: _madhab,
+        ),
+    ];
     final bearing = computeQiblaBearing(latitude: lat, longitude: lng);
 
     setState(() {
-      _prayerTimes = times;
+      _prayerTimes = upcomingDays.first;
       _qiblaBearing = bearing;
     });
 
-    if (_notificationsEnabled) {
-      _notificationService.scheduleForToday(
-        times,
-        labelFor: (key) => AppStrings.forLanguage(_language, key),
-      );
-    } else {
-      _notificationService.cancelAll();
-    }
+    _notificationService.scheduleUpcoming(
+      upcomingDays,
+      isEnabled: (weekday, prayer) =>
+          _notificationMatrix[weekday]?[prayer] ?? true,
+      labelFor: (key) => AppStrings.forLanguage(_language, key),
+    );
   }
 
   Future<void> _openLocationPicker() async {
@@ -160,15 +160,20 @@ class _HomeShellState extends State<HomeShell> {
     _recomputeTimesAndQibla();
   }
 
-  Future<void> _onNotificationsChanged(bool enabled) async {
-    setState(() => _notificationsEnabled = enabled);
-    await _prefs.setNotificationsEnabled(enabled);
-    if (enabled) {
-      await _notificationService.requestPermission();
-      _recomputeTimesAndQibla();
-    } else {
-      await _notificationService.cancelAll();
-    }
+  Future<void> _onNotificationToggled(
+    int weekday,
+    String prayer,
+    bool enabled,
+  ) async {
+    setState(() {
+      final dayMap = Map<String, bool>.from(
+        _notificationMatrix[weekday] ?? {},
+      );
+      dayMap[prayer] = enabled;
+      _notificationMatrix = {..._notificationMatrix, weekday: dayMap};
+    });
+    await _prefs.setNotificationEnabled(weekday, prayer, enabled);
+    _recomputeTimesAndQibla();
   }
 
   @override
@@ -180,6 +185,7 @@ class _HomeShellState extends State<HomeShell> {
       PrayerTimesScreen(
         locationState: _locationState,
         times: _prayerTimes,
+        language: _language,
         onRetryLocation: _refreshLocation,
       ),
       QiblaScreen(
@@ -191,12 +197,12 @@ class _HomeShellState extends State<HomeShell> {
         language: _language,
         calculationMethod: _calculationMethod,
         madhab: _madhab,
-        notificationsEnabled: _notificationsEnabled,
+        notificationMatrix: _notificationMatrix,
         locationLabel: locationLabel,
         onLanguageChanged: _onLanguageChanged,
         onCalculationMethodChanged: _onCalculationMethodChanged,
         onMadhabChanged: _onMadhabChanged,
-        onNotificationsChanged: _onNotificationsChanged,
+        onNotificationToggled: _onNotificationToggled,
         onChangeLocation: _openLocationPicker,
       ),
     ];

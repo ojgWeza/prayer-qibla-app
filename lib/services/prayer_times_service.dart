@@ -83,6 +83,10 @@ double computeQiblaBearing({required double latitude, required double longitude}
   return Qibla.qibla(Coordinates(latitude, longitude));
 }
 
+/// The 5 obligatory prayers notifications can be scheduled for.
+/// Sunrise is excluded — it isn't a prayer time.
+const List<String> notifiablePrayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
 const List<String> availableCalculationMethods = [
   'egyptian',
   'muslimWorldLeague',
