@@ -225,26 +225,30 @@ is done — move it into "Done" rather than leaving it ambiguous.
       than box size — see the new RTL item directly below, found from that same
       screenshot.
 - [ ] **Widget: icon renders on the wrong side for Arabic — RTL mirroring isn't
-      applying to the widget despite `supportsRtl="true"`.** Found live (2026-08-06):
-      after adding `android:supportsRtl="true"` to `AndroidManifest.xml` and writing
-      `next_prayer_widget.xml`'s horizontal `LinearLayout` with the icon as the first
-      child (intending Android to mirror it to the visual right/"start" side for
-      Arabic), the icon actually rendered on the **left**, with the time column on
-      the right — i.e. plain LTR child order, not mirrored at all, even though the
-      rest of the phone/app UI is confirmed running in Arabic. Root cause not yet
-      confirmed, but the likely explanation: `AppWidgetProviderInfo`/`RemoteViews` are
-      inflated by the **launcher's own process**, and layout-direction mirroring for
-      AppWidgets may not reliably follow the widget-owning app's manifest
-      `supportsRtl` flag the way in-app Flutter/Activity UI does — this needs research
-      (search "RemoteViews RTL layoutDirection AppWidget" territory), not another
-      blind attempt. Two candidate fixes once confirmed: (a) explicitly set
-      `android:layoutDirection="rtl"` on the widget's root view rather than relying on
-      automatic mirroring, or (b) stop relying on mirroring at all and hardcode the
-      child order for the app's primary language (Arabic — `PrefsService` already
-      defaults to `'ar'`), i.e. write the XML with the icon as the *last* child so it
-      renders on the right without needing RTL resolution, since this app is
-      Arabic-first. **Do not claim this fixed without re-verifying live on the Mi
-      10.**
+      applying to the widget despite `supportsRtl="true"`.** Found live (2026-08-06).
+      **Root cause confirmed (2026-08-06)**: `RemoteViews` are inflated by the
+      **launcher process**, which resolves RTL from the device's *system* locale —
+      not from Flutter's in-app language override (`PrefsService`, independent of
+      system locale). So `supportsRtl="true"` alone can never mirror this widget for
+      the app's own Arabic setting unless the phone's system language also happens to
+      be Arabic. **Fix implemented and pushed** (commit `a200aa5` on
+      `feature/home-screen-widget`), not a manifest tweak: `widget_service.dart` now
+      also pushes the raw `language` string; `NextPrayerWidgetProvider.kt` reads it
+      and calls `views.setInt(R.id.widget_root, "setLayoutDirection",
+      LAYOUT_DIRECTION_RTL/LTR)` explicitly on the new `@+id/widget_root` FrameLayout,
+      driven by the app's actual language choice rather than system config or a
+      hardcoded order — works correctly if the user ever switches language too.
+      `flutter analyze`/`custom_lint`/`flutter test` all green (Kotlin side can only
+      be checked by a real Gradle build). **NOT yet live-verified** — a CI build was
+      dispatched (run `31119004460`) but GitHub Actions was hit by a **platform-wide
+      outage** (confirmed via githubstatus.com, "Minor Service Outage") right as this
+      session ended: the run sat `queued` for 14+ minutes and a duplicate dispatch
+      failed with `Service Unavailable` resolving action downloads — not our code.
+      **Next session: check `gh run list --branch feature/home-screen-widget` first;
+      if `31119004460` finished, download the APK and verify live on the Mi 10
+      (icon should now render on the right, time/countdown on the left, in Arabic)
+      before touching anything else on this branch. If it's still stuck/failed from
+      the outage, just re-dispatch.**
 
 ## Not started yet — ordered easiest → hardest 📋
 

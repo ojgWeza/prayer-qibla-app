@@ -202,13 +202,24 @@ session doesn't pay the same cost.
   Flutter UI and the phone's own system chrome were confirmed rendering RTL. An icon
   written as the first child, expecting it to visually land on the right (the
   "start" side) for Arabic, rendered on the left instead — plain unmirrored LTR
-  order. Not yet root-caused (see TODO.md for the open item) — the working theory is
-  that `RemoteViews` is inflated inside the **launcher's own process**, which may not
-  resolve layout direction from the widget-owning app's manifest the way in-app
-  Activity/Flutter UI does. Don't assume `supportsRtl` alone fixes widget mirroring;
-  verify live, and consider hardcoding child order for the app's primary language
-  (Arabic) instead of relying on automatic mirroring if this turns out to be a real
-  RemoteViews limitation.
+  order. **Root cause confirmed (2026-08-06)**: `RemoteViews` are inflated by the
+  **launcher's own process**, which resolves RTL from the device's *system* locale
+  configuration — not from the widget-owning app's manifest, and critically not from
+  this app's own in-app language override (`PrefsService`, a toggle independent of
+  system locale, e.g. the phone can be system-English while the app is set to
+  Arabic). `supportsRtl` alone can never mirror a widget for an app-internal
+  language choice that doesn't match system locale. **Fix**: don't rely on automatic
+  mirroring at all — push the app's actual `language` value from Dart
+  (`widget_service.dart`) into the widget data, give the root layout an
+  `android:id`, and set it explicitly in the provider:
+  `views.setInt(R.id.widget_root, "setLayoutDirection", View.LAYOUT_DIRECTION_RTL /
+  _LTR)` (`RemoteViews.setInt` reflectively calls any single-int setter, and
+  `View.setLayoutDirection(int)` exists since API 17). This tracks the app's actual
+  language choice rather than system config or a hardcoded child order, so it stays
+  correct if the user switches language. Implemented in
+  `NextPrayerWidgetProvider.kt` + `next_prayer_widget.xml` (commit `a200aa5`) — not
+  yet live-verified (see TODO.md, blocked by a GitHub Actions outage the same
+  session this landed).
 - **An XML comment containing a literal `--` anywhere in its body (not just as
   delimiters) fails AAPT resource parsing with a hard, whole-build-failing error**
   (`The string "--" is not permitted within comments`) — caught this twice in one
@@ -310,6 +321,17 @@ session doesn't pay the same cost.
   build a raw API call** — this is correctly blocked by the auto-mode classifier. If
   `gh` seems unavailable, look for it installed elsewhere (see above) before reaching
   for credential extraction as a workaround.
+- **`gh workflow run` can return `HTTP 500` yet still have actually dispatched the
+  run** — caught 2026-08-06: a `500` on the first attempt looked like a clean
+  failure, so it was retried, but `gh run list` afterward showed *two* runs queued
+  within 3 seconds of each other. Check `gh run list --branch <branch> --limit 3`
+  before retrying a failed dispatch, to avoid burning a second CI run on a duplicate.
+- **GitHub Actions itself can have platform-wide outages** — check
+  `curl -s https://www.githubstatus.com/api/v2/status.json` if a dispatched run sits
+  in `queued` far longer than the usual ~7-10 min, or fails immediately with
+  `Service Unavailable` while resolving action downloads (as opposed to failing
+  inside an actual build step). Not our code/config when this happens — just
+  re-dispatch once the status page clears, don't start debugging the workflow file.
 
 ### External images / design assets
 - **Look at any candidate image yourself (Read tool) before using it.** A text-based
