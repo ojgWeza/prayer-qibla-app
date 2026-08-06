@@ -53,5 +53,17 @@ Future<void> updateNextPrayerWidget({
     'prayer_schedule_json',
     jsonEncode(schedule),
   );
+  // The native provider computes the countdown text itself (it has to --
+  // the schedule is only pushed when times are recomputed, not every
+  // minute), so it needs the same localized templates the in-app countdown
+  // uses rather than duplicating ar/en wording in Kotlin.
+  await HomeWidget.saveWidgetData<String>(
+    'remaining_hours_minutes_template',
+    AppStrings.forLanguage(language, 'remainingHoursMinutes'),
+  );
+  await HomeWidget.saveWidgetData<String>(
+    'remaining_minutes_template',
+    AppStrings.forLanguage(language, 'remainingMinutes'),
+  );
   await HomeWidget.updateWidget(androidName: _androidWidgetName);
 }

@@ -27,18 +27,31 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
         val header = widgetData.getString("next_prayer_header", null)
             ?: context.getString(R.string.widget_default_header)
         val scheduleJson = widgetData.getString("prayer_schedule_json", null)
+        // Localized "{h} hours & {m} minutes remaining" / "{m} minutes
+        // remaining" templates, pushed from the same AppStrings entries the
+        // in-app countdown uses (see prayer_times_screen.dart), so the
+        // widget's countdown text matches the app's wording/language.
+        val hoursMinutesTemplate = widgetData.getString("remaining_hours_minutes_template", null)
+        val minutesTemplate = widgetData.getString("remaining_minutes_template", null)
 
         var prayerLabel = context.getString(R.string.widget_default_prayer)
         var prayerTime = context.getString(R.string.widget_default_time)
+        var countdownText = ""
 
         if (scheduleJson != null) {
             val now = System.currentTimeMillis()
             val schedule = JSONArray(scheduleJson)
             for (i in 0 until schedule.length()) {
                 val entry = schedule.getJSONObject(i)
-                if (entry.getLong("millis") >= now) {
+                val millis = entry.getLong("millis")
+                if (millis >= now) {
                     prayerLabel = entry.getString("label")
                     prayerTime = entry.getString("display")
+                    countdownText = formatRemaining(
+                        millis - now,
+                        hoursMinutesTemplate,
+                        minutesTemplate,
+                    )
                     break
                 }
             }
@@ -51,10 +64,27 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
             views.setTextViewText(R.id.widget_header, header)
             views.setTextViewText(R.id.widget_prayer_name, prayerLabel)
             views.setTextViewText(R.id.widget_prayer_time, prayerTime)
+            views.setTextViewText(R.id.widget_countdown, countdownText)
             views.setOnClickPendingIntent(R.id.widget_header, pendingIntent)
             views.setOnClickPendingIntent(R.id.widget_prayer_name, pendingIntent)
             views.setOnClickPendingIntent(R.id.widget_prayer_time, pendingIntent)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+    }
+
+    private fun formatRemaining(
+        remainingMillis: Long,
+        hoursMinutesTemplate: String?,
+        minutesTemplate: String?,
+    ): String {
+        val clamped = remainingMillis.coerceAtLeast(0)
+        val totalMinutes = clamped / 60000
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+        val template = if (hours > 0) hoursMinutesTemplate else minutesTemplate
+        return template
+            ?.replace("{h}", hours.toString())
+            ?.replace("{m}", minutes.toString())
+            ?: ""
     }
 }

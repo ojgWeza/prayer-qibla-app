@@ -1,63 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors the mockup's .widget-card exactly (see prayer_qibla_mockup
+     Artifact, "home-mock" section): a light card with a gold accent
+     stripe on the leading edge, a small gold seal icon, a label + prayer
+     name column, and a time + countdown column at the trailing edge. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background"
-    android:padding="16dp">
+    android:background="@drawable/widget_background">
 
-    <ImageView
-        android:layout_width="88dp"
-        android:layout_height="88dp"
-        android:layout_gravity="center_vertical|end"
-        android:layout_marginEnd="-28dp"
-        android:alpha="0.18"
-        android:contentDescription="@null"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_launcher_foreground" />
+    <!-- Accent stripe, matching .widget-card::before -->
+    <TextView
+        android:layout_width="5dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#B8892B"
+        android:text="" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:gravity="center"
-        android:orientation="vertical">
+        android:layout_gravity="center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
-        <TextView
-            android:id="@+id/widget_header"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/widget_default_header"
-            android:textColor="#F2DFA6"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_launcher_foreground" />
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:gravity="center"
-            android:orientation="horizontal">
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_header"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_default_header"
+                android:textColor="#5C6864"
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/widget_prayer_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
+                android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/widget_default_prayer"
-                android:textColor="#FFFFFF"
-                android:textSize="22sp"
+                android:textColor="#1C2622"
+                android:textSize="15sp"
                 android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:gravity="end"
+            android:orientation="vertical">
 
             <TextView
                 android:id="@+id/widget_prayer_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/widget_default_time"
-                android:textColor="#F2DFA6"
-                android:textSize="22sp"
+                android:textColor="#0A5951"
+                android:textSize="18sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_countdown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#5C6864"
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

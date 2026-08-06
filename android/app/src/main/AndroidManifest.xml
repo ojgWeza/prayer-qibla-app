@@ -8,7 +8,8 @@
     <application
         android:label="prayer_qibla"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true">
         <!-- TODO: replace with your real AdMob App ID before release (this is Google's public test ID) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

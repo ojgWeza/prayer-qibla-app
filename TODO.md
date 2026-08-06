@@ -136,9 +136,22 @@ is done — move it into "Done" rather than leaving it ambiguous.
          (GPS)" list tile already exists there). New `defaultLocationName` string key
          in `app_strings.dart` (ar/en) for the chip label while on the default.
       `flutter analyze` + `dart run custom_lint` + `flutter test` all green.
-      **Not yet verified live on a device** — needs a true clean-install test on the
-      Mi 10 (uninstall first, not just reinstall over the old cache) to confirm the
-      Cairo default actually shows on a genuine first launch.
+      **Verified live on the Mi 10** (2026-08-06, clean uninstall + fresh install):
+      first-ever launch showed real Cairo prayer times and qibla bearing (136°)
+      immediately, no permission prompt, no blank screen.
+      3. **Follow-up fix, same session**: user caught a real flash-of-wrong-screen —
+         on that same live run, the "location permission needed" error screen briefly
+         showed before the Cairo default kicked in, timed around when the notification
+         permission dialog was up. Cause: `_locationState` defaulted to
+         `LocationState.denied` at field-init time, and `PrayerTimesScreen`/
+         `QiblaScreen` treat `denied` as "show the permission-denied error," even
+         though bootstrap hadn't actually checked location yet at that point — it was
+         still awaiting the unrelated notification-permission request. Fixed by adding
+         a new `LocationState.unknown` (in `location_service.dart`) as the initial
+         value instead of reusing `denied`; since neither screen's error check matches
+         `unknown`, they correctly fall through to the existing loading-spinner branch
+         until bootstrap actually resolves a location. `flutter analyze`/
+         `custom_lint`/`flutter test` green; **not yet re-verified live**.
 - [x] **Added a live countdown line** under the next-prayer row: "4 hours & 46 minutes
       remaining" style text (falls back to "12 minutes remaining" once under an
       hour), shown as the highlighted `_PrayerRow`'s subtitle in
@@ -161,39 +174,53 @@ is done — move it into "Done" rather than leaving it ambiguous.
       real device (so far only verified by static analysis/tests, not a live run)
 - [ ] Re-test pull-to-refresh on the Prayer Times screen actually recomputes times after
       a real location change on-device (added in PR #3, not yet exercised live)
-- [ ] **Widget still looks visually broken despite yesterday's fixes** — the box
-      renders much bigger than the text it contains, even after multiple passes. Read
-      the actual layout/provider code to find the real cause instead of tweaking
-      values again: `next_prayer_widget.xml`'s outer `FrameLayout` is
-      `match_parent`×`match_parent` and paints the full
-      `@drawable/widget_background` over whatever area the launcher grants the widget,
-      while the actual content (icon + two `TextView`s) sits in an inner
-      `wrap_content`, centered `LinearLayout` with **fixed** text sizes (13sp/22sp).
-      `NextPrayerWidgetProvider.kt` never overrides `onAppWidgetOptionsChanged`, so
-      those sizes never adapt to how much space was actually granted. Home-screen
-      launchers size widgets to whole grid cells, which are typically much larger than
-      the declared `minWidth="180dp"`/`minHeight="90dp"`/`targetCellWidth="3"` hints —
-      those are only a floor, not what gets rendered. Net effect: a big painted
-      background with a small fixed-size text blob centered in the middle, which
-      matches exactly what's being seen live.
-      **Chosen fix (per user, 2026-08-06): don't fight this with runtime responsive
-      scaling — ship two separate, pickable widgets instead.** A "compact" variant
-      (today's small text, tuned for its own fixed target size) and a "large text"
-      variant (bigger fonts/icon, tuned for a bigger fixed target size), each its own
-      `AppWidgetProvider` + `appwidget-provider` XML + layout, so both show up as
-      distinct entries in the Android widget picker and the user picks whichever fits
-      how they actually resize it — this is the standard pattern most Android apps use
-      instead of dynamic `onAppWidgetOptionsChanged` scaling, and is far more reliable.
-      Concretely: duplicate `NextPrayerWidgetProvider.kt` →
-      `NextPrayerWidgetProviderLarge.kt` (or parameterize one class registered twice),
-      duplicate `next_prayer_widget.xml` → `next_prayer_widget_large.xml` with bigger
-      text sizes/padding/icon and a larger `minWidth`/`minHeight`/`targetCellWidth`/
-      `targetCellHeight` in its own `next_prayer_widget_info.xml`, and register the
-      second provider in `AndroidManifest.xml`. **Do not claim this fixed without
-      re-verifying live on the Mi 10** — this exact pattern (claiming a widget fix
-      without a live check) is why it's still broken after multiple attempts; see
-      `CONSTITUTION.md` § 4 for the two prior root causes that were only found by
-      actually looking at the device.
+- [x] **Widget visual redesign — rebuilt to actually match the mockup, not just
+      tweaked** (2026-08-06). User's live verdict on the previous version: "its look
+      has zero relation to what we agreed on or what's in the artifact." Confirmed by
+      comparing directly against the mockup's `.widget-card` (the "معاينة تطبيق
+      مواقيت الصلاة والقبلة" Artifact, home-widget-preview section): the widget had
+      drifted to a solid teal box with a giant faded 88dp watermark icon and no
+      countdown text, none of which matches the mockup's light card + small gold seal
+      + countdown line. Rebuilt from scratch to mirror the mockup layout exactly:
+      - `widget_background.xml`: solid teal box → white card, thin `#E3D9C2` border,
+        18dp corners (was `#0D6E63` solid).
+      - `next_prayer_widget.xml`: full rewrite — gold accent stripe on the leading
+        edge (`.widget-card::before`), small 26dp gold seal icon (reusing
+        `ic_launcher_foreground`, already gold-on-transparent, no tint needed) instead
+        of the old 88dp alpha-0.18 background watermark, a label+prayer-name column,
+        and a time+**new countdown line** column at the trailing edge.
+      - **Countdown line added**: previously the widget showed no remaining-time text
+        at all. `NextPrayerWidgetProvider.kt` now computes it natively
+        (`formatRemaining()`) from the existing pushed `millis`, using new
+        `remaining_hours_minutes_template`/`remaining_minutes_template` keys pushed
+        from `widget_service.dart` — reusing the exact same `remainingHoursMinutes`/
+        `remainingMinutes` `AppStrings` entries the in-app countdown uses, so wording
+        matches and ar/en translation logic isn't duplicated in Kotlin.
+      - Added `android:supportsRtl="true"` to `AndroidManifest.xml` (was missing
+        entirely), so the widget's `start`/`end` layout attributes actually mirror for
+        Arabic instead of behaving like fixed left/right.
+      `flutter analyze` + `custom_lint` + `flutter test` all green (Kotlin side can
+      only be checked by a real Gradle build, not these). **Not yet verified live** —
+      needs a fresh widget add on the Mi 10 to confirm it actually renders as
+      redesigned.
+- [ ] **Widget: oversized box vs. small text — still open, separate from the visual
+      redesign above.** The box still renders bigger than a launcher's default grid
+      cell needs, because `next_prayer_widget.xml`'s outer `FrameLayout` is
+      `match_parent`×`match_parent` and paints the background over whatever area the
+      launcher grants, while `NextPrayerWidgetProvider.kt` never overrides
+      `onAppWidgetOptionsChanged`, so text/icon sizes never adapt to the granted size
+      (only a floor is declared via `minWidth`/`minHeight`/`targetCellWidth`, not a
+      ceiling). **Chosen fix (per user, 2026-08-06): ship two separate, pickable
+      widgets instead of fighting this with runtime responsive scaling** — a
+      "compact" variant (today's sizes) and a "large text" variant (bigger
+      fonts/icon/padding, its own bigger declared `minWidth`/`minHeight`), each its
+      own `AppWidgetProvider` + `appwidget-provider` XML + layout, registered
+      separately in `AndroidManifest.xml`, so both show up as distinct entries in the
+      Android widget picker. **Do not claim this fixed without re-verifying live on
+      the Mi 10** — this exact pattern (claiming a widget fix without a live check) is
+      why it stayed broken after multiple prior attempts; see `CONSTITUTION.md` § 4
+      for the two earlier root causes that were only found by actually looking at the
+      device.
 
 ## Not started yet — ordered easiest → hardest 📋
 

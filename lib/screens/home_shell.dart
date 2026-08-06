@@ -37,7 +37,7 @@ class _HomeShellState extends State<HomeShell> {
 
   int _tabIndex = 0;
 
-  LocationState _locationState = LocationState.denied;
+  LocationState _locationState = LocationState.unknown;
   double? _latitude;
   double? _longitude;
   DailyPrayerTimes? _prayerTimes;
