@@ -203,24 +203,25 @@ is done — move it into "Done" rather than leaving it ambiguous.
       only be checked by a real Gradle build, not these). **Not yet verified live** —
       needs a fresh widget add on the Mi 10 to confirm it actually renders as
       redesigned.
-- [ ] **Widget: oversized box vs. small text — still open, separate from the visual
-      redesign above.** The box still renders bigger than a launcher's default grid
-      cell needs, because `next_prayer_widget.xml`'s outer `FrameLayout` is
-      `match_parent`×`match_parent` and paints the background over whatever area the
-      launcher grants, while `NextPrayerWidgetProvider.kt` never overrides
-      `onAppWidgetOptionsChanged`, so text/icon sizes never adapt to the granted size
-      (only a floor is declared via `minWidth`/`minHeight`/`targetCellWidth`, not a
-      ceiling). **Chosen fix (per user, 2026-08-06): ship two separate, pickable
-      widgets instead of fighting this with runtime responsive scaling** — a
-      "compact" variant (today's sizes) and a "large text" variant (bigger
-      fonts/icon/padding, its own bigger declared `minWidth`/`minHeight`), each its
-      own `AppWidgetProvider` + `appwidget-provider` XML + layout, registered
-      separately in `AndroidManifest.xml`, so both show up as distinct entries in the
-      Android widget picker. **Do not claim this fixed without re-verifying live on
-      the Mi 10** — this exact pattern (claiming a widget fix without a live check) is
-      why it stayed broken after multiple prior attempts; see `CONSTITUTION.md` § 4
-      for the two earlier root causes that were only found by actually looking at the
-      device.
+- [x] **Widget: oversized box vs. small text — root cause refined, content scaled
+      up.** Live-tested the redesigned card on the Mi 10 (2026-08-06) and the box was
+      still much bigger than the 2-line content needed — user pushed back hard on
+      this being unresolved. Re-examined the actual constraint: launcher hosts (MIUI
+      here) grant widget space in **whole grid cells**, and even a small declared
+      `minHeight` (90dp) still rounds up to at least one full grid row — there is no
+      way to get a box smaller than one row, so the earlier "ship a compact variant"
+      half of the two-widget plan doesn't actually help (a compact variant would
+      still occupy the same minimum one-row box). The real lever is making the
+      **content** fill that inherently tall-ish row properly instead of leaving two
+      small lines centered in mostly empty space. Scaled everything up in
+      `next_prayer_widget.xml`: icon 26dp→44dp, prayer name 15sp→22sp, time
+      18sp→28sp, header 11sp→14sp, countdown 10sp→13sp, padding 14dp→22dp. The
+      "large text" variant idea from the earlier plan is kept as a *further* opt-in
+      option on top of this (for a 2-row placement), not as the fix for the base
+      case. **Do not claim this fixed without re-verifying live** — this exact
+      pattern (claiming a widget fix without a live check) is why it stayed broken
+      after multiple prior attempts; see `CONSTITUTION.md` § 4 for the two earlier
+      root causes that were only found by actually looking at the device.
 
 ## Not started yet — ordered easiest → hardest 📋
 
@@ -263,11 +264,6 @@ listed separately at the bottom since "effort" doesn't mean the same thing for t
       happens next), and (2) recompute `_prayerTimes` when the calendar date changes
       while the app is running/resumed. Also worth double-checking the resolved
       location wasn't stale/wrong at the time (see the GPS-caching item below).
-- [ ] **Widget: fix oversized box vs. small text, by shipping a compact + a
-      large-text variant as two separate pickable widgets** — see the full write-up
-      under "In progress" above; listed here too since it's a real implementation
-      task (a second `AppWidgetProvider` + layout + manifest entry), not a one-line
-      tweak, and needs live device verification before it can be marked done.
 - [ ] **Add swipe navigation between the 3 main tabs** (Prayer Times / Qibla /
       Settings), not just the bottom `NavigationBar`. `HomeShell`
       (`lib/screens/home_shell.dart`) currently renders the 3 screens in an

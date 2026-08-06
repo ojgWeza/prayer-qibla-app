@@ -10,27 +10,33 @@
 
     <!-- Accent stripe, matching .widget-card::before -->
     <TextView
-        android:layout_width="5dp"
+        android:layout_width="6dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
         android:background="#B8892B"
         android:text="" />
 
+    <!-- Sizes are scaled well past the mockup's phone-preview card on
+         purpose: launcher hosts grant widget space in whole grid cells, so
+         this box can't be shrunk below roughly one row no matter how small
+         minHeight is declared -- content has to fill that row properly
+         instead, rather than leaving two small lines floating in mostly
+         empty space (this is what the user flagged live, 2026-08-06). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="20dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="14dp">
+        android:paddingStart="22dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="22dp">
 
         <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:layout_marginEnd="12dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="16dp"
             android:contentDescription="@null"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_launcher_foreground" />
@@ -47,25 +53,25 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_default_header"
                 android:textColor="#5C6864"
-                android:textSize="11sp" />
+                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/widget_prayer_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/widget_default_prayer"
                 android:textColor="#1C2622"
-                android:textSize="15sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="10dp"
             android:gravity="end"
             android:orientation="vertical">
 
@@ -75,18 +81,18 @@
                 android:layout_height="wrap_content"
                 android:text="@string/widget_default_time"
                 android:textColor="#0A5951"
-                android:textSize="18sp"
+                android:textSize="28sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_countdown"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#5C6864"
-                android:textSize="10sp" />
+                android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
