@@ -86,6 +86,7 @@ class AppStrings {
       'ar': 'متبقي {m} دقيقة',
       'en': '{m} minutes remaining',
     },
+    'defaultLocationName': {'ar': 'القاهرة، مصر', 'en': 'Cairo, Egypt'},
   };
 
   static String of(BuildContext context, String key) {

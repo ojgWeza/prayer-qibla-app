@@ -113,6 +113,32 @@ is done — move it into "Done" rather than leaving it ambiguous.
       since that exact filename no longer exists after the split. Not yet run through
       CI to confirm the upload glob actually matches — verify on the next push to
       master.
+- [x] **Stopped blocking app startup on a live GPS fix, in two layers.**
+      **Live-confirmed as bad UX on the Mi 10 (2026-08-06)**: a fresh install showed
+      nothing but a blank "location permission needed" screen until GPS resolved — no
+      cached prayer times, no prior screen state, just an empty blocking wait.
+      1. **Caching layer**: `_bootstrap()` in `lib/screens/home_shell.dart` now checks
+         `PrefsService.getCachedGpsLocation()` (new) before ever calling
+         `LocationService.getCurrentLocation()`. If a previous GPS fix is cached, it
+         shows times from it instantly and refreshes GPS in the background
+         (`_backgroundLocationRefresh()` — a failed background refresh no longer
+         clobbers an already-showing cached location, only a successful one updates
+         and re-caches). `_refreshLocation()` (pull-to-refresh, explicit "use GPS"
+         picker action) now also writes to the cache on every successful fix.
+      2. **Default-location layer (per user, 2026-08-06, refining the above)**: even
+         the *very first* launch ever — before any GPS fix or manual pick exists —
+         should not prompt for GPS automatically at all. `_bootstrap()` now falls back
+         to a hardcoded default (Cairo, Egypt — `_defaultLatitude`/`_defaultLongitude`
+         in `home_shell.dart`) when there's no manual location and no cached GPS fix,
+         showing that city's times immediately with no permission prompt. The user
+         opts into GPS or a specific city explicitly via the existing location picker
+         (`CitySearchScreen`, tap the app bar location chip — "Use my current location
+         (GPS)" list tile already exists there). New `defaultLocationName` string key
+         in `app_strings.dart` (ar/en) for the chip label while on the default.
+      `flutter analyze` + `dart run custom_lint` + `flutter test` all green.
+      **Not yet verified live on a device** — needs a true clean-install test on the
+      Mi 10 (uninstall first, not just reinstall over the old cache) to confirm the
+      Cairo default actually shows on a genuine first launch.
 - [x] **Added a live countdown line** under the next-prayer row: "4 hours & 46 minutes
       remaining" style text (falls back to "12 minutes remaining" once under an
       hour), shown as the highlighted `_PrayerRow`'s subtitle in
@@ -223,22 +249,6 @@ listed separately at the bottom since "effort" doesn't mean the same thing for t
       tapping the bottom nav both work and stay in sync. Watch for: RTL (Arabic swipe
       direction should feel natural, not mirrored wrong), and the Qibla screen's
       compass/gesture handling shouldn't fight with horizontal swipe.
-- [ ] **Don't require a live GPS fix at every app startup.** **Live-confirmed as bad
-      UX on the Mi 10 (2026-08-06)**: a fresh install shows nothing but a blank
-      "location permission needed" screen until GPS resolves — no cached prayer times,
-      no prior screen state, just an empty blocking wait. Right now
-      `_bootstrap()` in `lib/screens/home_shell.dart` only skips the GPS call when a
-      *manual* (city-search) location was saved; otherwise it always calls
-      `LocationService.getCurrentLocation()`, which blocks on a fresh
-      `Geolocator.getCurrentPosition()` fix. `LocationService.getLastKnownLocation()`
-      already exists but is **dead code, never called**. Fix: persist the last
-      resolved coordinates (GPS *or* manual) in `PrefsService`, show times instantly
-      from that cache on startup, and only kick off a fresh GPS fix in the background
-      (or on explicit pull-to-refresh / "use GPS" picker action). Also surface the
-      location picker more prominently (`CitySearchScreen` already exists, tap the app
-      bar location chip) so switching location doesn't feel GPS-only. This is also the
-      agreed no-regrets first step on the open "lower-power location strategy"
-      question — see Open decisions.
 - [ ] **Settings backup/restore.** Export/import all `PrefsService` settings (location,
       calc method, madhab, notification toggles, language, time format) as a single
       file — useful before reinstalling or switching devices. (Competitor-analysis

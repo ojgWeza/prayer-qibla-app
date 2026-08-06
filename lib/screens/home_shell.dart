@@ -15,6 +15,12 @@ import 'prayer_times_screen.dart';
 import 'qibla_screen.dart';
 import 'settings_screen.dart';
 
+// Shown before the user has ever picked a location or resolved a GPS fix,
+// so first launch never blocks on a permission prompt with nothing on
+// screen. The user can switch away from it any time via the location chip.
+const _defaultLatitude = 30.0444;
+const _defaultLongitude = 31.2357;
+
 class HomeShell extends StatefulWidget {
   final ValueChanged<Locale> onLocaleChanged;
 
@@ -83,9 +89,17 @@ class _HomeShellState extends State<HomeShell> {
       if (mounted) setState(() => _locationState = LocationState.granted);
       _recomputeTimesAndQibla();
       unawaited(_backgroundLocationRefresh());
-    } else {
-      await _refreshLocation();
+      return;
     }
+
+    // Never picked a location before and no cached GPS fix yet -- default to
+    // Cairo instead of prompting for GPS automatically. The user opts into
+    // GPS or a specific city explicitly via the location picker.
+    _latitude = _defaultLatitude;
+    _longitude = _defaultLongitude;
+    _manualLocationName = AppStrings.forLanguage(_language, 'defaultLocationName');
+    if (mounted) setState(() => _locationState = LocationState.granted);
+    _recomputeTimesAndQibla();
   }
 
   /// Refreshes the GPS fix without disturbing an already-showing cached
