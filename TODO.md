@@ -197,12 +197,13 @@ is done — move it into "Done" rather than leaving it ambiguous.
         `remainingMinutes` `AppStrings` entries the in-app countdown uses, so wording
         matches and ar/en translation logic isn't duplicated in Kotlin.
       - Added `android:supportsRtl="true"` to `AndroidManifest.xml` (was missing
-        entirely), so the widget's `start`/`end` layout attributes actually mirror for
-        Arabic instead of behaving like fixed left/right.
+        entirely). **This did not actually fix RTL mirroring for the widget** as
+        assumed here — see the dedicated RTL bug item below, found live.
       `flutter analyze` + `custom_lint` + `flutter test` all green (Kotlin side can
-      only be checked by a real Gradle build, not these). **Not yet verified live** —
-      needs a fresh widget add on the Mi 10 to confirm it actually renders as
-      redesigned.
+      only be checked by a real Gradle build, not these). **Live-verified on the Mi
+      10 (2026-08-06)**: card style, accent stripe, and countdown line all render
+      correctly, matching the mockup. The RTL icon-placement bug (separate item
+      below) was found on this same live check.
 - [x] **Widget: oversized box vs. small text — root cause refined, content scaled
       up.** Live-tested the redesigned card on the Mi 10 (2026-08-06) and the box was
       still much bigger than the 2-line content needed — user pushed back hard on
@@ -218,10 +219,32 @@ is done — move it into "Done" rather than leaving it ambiguous.
       18sp→28sp, header 11sp→14sp, countdown 10sp→13sp, padding 14dp→22dp. The
       "large text" variant idea from the earlier plan is kept as a *further* opt-in
       option on top of this (for a 2-row placement), not as the fix for the base
-      case. **Do not claim this fixed without re-verifying live** — this exact
-      pattern (claiming a widget fix without a live check) is why it stayed broken
-      after multiple prior attempts; see `CONSTITUTION.md` § 4 for the two earlier
-      root causes that were only found by actually looking at the device.
+      case. **Live-verified on the Mi 10 (2026-08-06)**: text/icon are visibly bigger
+      and the countdown line renders — this part genuinely landed. User's overall
+      verdict on that same screenshot was still unhappy, but for a *different* reason
+      than box size — see the new RTL item directly below, found from that same
+      screenshot.
+- [ ] **Widget: icon renders on the wrong side for Arabic — RTL mirroring isn't
+      applying to the widget despite `supportsRtl="true"`.** Found live (2026-08-06):
+      after adding `android:supportsRtl="true"` to `AndroidManifest.xml` and writing
+      `next_prayer_widget.xml`'s horizontal `LinearLayout` with the icon as the first
+      child (intending Android to mirror it to the visual right/"start" side for
+      Arabic), the icon actually rendered on the **left**, with the time column on
+      the right — i.e. plain LTR child order, not mirrored at all, even though the
+      rest of the phone/app UI is confirmed running in Arabic. Root cause not yet
+      confirmed, but the likely explanation: `AppWidgetProviderInfo`/`RemoteViews` are
+      inflated by the **launcher's own process**, and layout-direction mirroring for
+      AppWidgets may not reliably follow the widget-owning app's manifest
+      `supportsRtl` flag the way in-app Flutter/Activity UI does — this needs research
+      (search "RemoteViews RTL layoutDirection AppWidget" territory), not another
+      blind attempt. Two candidate fixes once confirmed: (a) explicitly set
+      `android:layoutDirection="rtl"` on the widget's root view rather than relying on
+      automatic mirroring, or (b) stop relying on mirroring at all and hardcode the
+      child order for the app's primary language (Arabic — `PrefsService` already
+      defaults to `'ar'`), i.e. write the XML with the icon as the *last* child so it
+      renders on the right without needing RTL resolution, since this app is
+      Arabic-first. **Do not claim this fixed without re-verifying live on the Mi
+      10.**
 
 ## Not started yet — ordered easiest → hardest 📋
 

@@ -189,6 +189,36 @@ session doesn't pay the same cost.
   `android:alpha`, `android:scaleType`, and negative `layout_marginEnd` are all honored
   at inflate time with zero extra Kotlin code, since they're baked into the layout
   resource rather than being a per-update `RemoteViews.setXxx(...)` reflective call.
+- **A launcher grants widget space in whole grid cells — you cannot get a box smaller
+  than one row/column, no matter how small `minWidth`/`minHeight` is declared.** A
+  90dp `minHeight` still rounded up to a much taller box on MIUI. This invalidated an
+  earlier plan to fix "box looks huge vs. tiny text" by shipping a second, smaller
+  "compact" `AppWidgetProvider` variant — a compact variant would still occupy the
+  same one-row minimum, so it wouldn't actually shrink anything. The real fix is
+  scaling the *content* (text/icon/padding) up to fill the row the host already
+  grants, not trying to shrink the box below the host's grid quantum.
+- **`android:supportsRtl="true"` in the manifest did NOT make this widget's
+  `LinearLayout` child order mirror for Arabic**, even though the rest of the app's
+  Flutter UI and the phone's own system chrome were confirmed rendering RTL. An icon
+  written as the first child, expecting it to visually land on the right (the
+  "start" side) for Arabic, rendered on the left instead — plain unmirrored LTR
+  order. Not yet root-caused (see TODO.md for the open item) — the working theory is
+  that `RemoteViews` is inflated inside the **launcher's own process**, which may not
+  resolve layout direction from the widget-owning app's manifest the way in-app
+  Activity/Flutter UI does. Don't assume `supportsRtl` alone fixes widget mirroring;
+  verify live, and consider hardcoding child order for the app's primary language
+  (Arabic) instead of relying on automatic mirroring if this turns out to be a real
+  RemoteViews limitation.
+- **An XML comment containing a literal `--` anywhere in its body (not just as
+  delimiters) fails AAPT resource parsing with a hard, whole-build-failing error**
+  (`The string "--" is not permitted within comments`) — caught this twice in one
+  session (once using `--` as an em-dash substitute, once again in a *different* file
+  right after fixing the first). `flutter analyze`/`custom_lint`/`flutter test` don't
+  catch this at all since it's Android resource XML, not Dart — it only surfaces
+  ~3 minutes into a CI Gradle build. Before pushing any change that touches Android
+  resource XML comments, grep for `--` inside `<!-- -->` bodies specifically (a plain
+  `--` search flags the legitimate `<!--`/`-->` delimiters too, so check what's
+  *between* them) rather than relying on CI to catch it.
 
 ### Local device testing (no Android Studio on this machine)
 - `adb` was installed standalone — just the `platform-tools` zip from
@@ -226,6 +256,22 @@ session doesn't pay the same cost.
   Uninstalling wipes app data, which also removes any placed home screen widget and
   the `home_widget` SharedPreferences data behind it — the app has to be reopened once
   after every reinstall before a widget will show real data again.
+- **Check `adb shell dumpsys window | grep mCurrentFocus` before taking a screenshot
+  of a real, shared physical device — especially right after a wake/unlock/launch
+  sequence.** A blind screenshot once caught the user's private WhatsApp conversation
+  instead of the app, because the phone was in concurrent personal use and a `monkey`
+  launch intent didn't win the foreground race before the screenshot fired. Confirm
+  the target app actually owns focus first; if it doesn't, don't screenshot, and ask
+  whether the device is free to keep automating against.
+- **`LocationState` needs a real "not yet determined" value, not just reuse of
+  `denied` as the initial field default.** `PrayerTimesScreen`/`QiblaScreen` treat
+  `denied`/`deniedForever`/`serviceDisabled` as "show the permission-error UI" — if
+  the state field starts at `denied` before bootstrap has actually checked anything,
+  that error screen flashes during any slow work bootstrap does first (here: an
+  awaited notification-permission request), even though the real location logic
+  hasn't run yet. Fixed by adding `LocationState.unknown` as the true initial value,
+  which falls through to the existing loading-spinner branch instead. Caught live by
+  the user, not by static review.
 - **`adb` commands run from this project's Bash tool (git-bash/MSYS) mangle any
   argument that starts with a single `/`** — including the remote device path in
   `adb push <local> /sdcard/...` or `adb shell <cmd> /sdcard/...` — silently rewriting
@@ -337,6 +383,17 @@ session doesn't pay the same cost.
   no rename.** Explicitly confirmed with the user, since this can never change again
   after the first Play Store upload. Don't revisit this without a strong new reason —
   a change now would mean starting over as a brand-new Play Store listing.
+- **First-ever app launch defaults to Cairo, Egypt (2026-08-06), not a live GPS
+  prompt.** Confirmed bad UX live on the Mi 10: a fresh install blocked on a full GPS
+  permission flow with nothing but a blank screen until it resolved. Decided
+  approach, in order of precedence in `home_shell.dart`'s `_bootstrap()`: (1) a saved
+  manual location always wins, (2) otherwise a cached GPS fix (`PrefsService`) is
+  used instantly while a fresh fix refreshes in the background, (3) otherwise —
+  meaning no location has ever been resolved or picked at all — default to Cairo
+  (`_defaultLatitude`/`_defaultLongitude` constants) with **no automatic GPS
+  prompt**. The user opts into GPS or a specific city explicitly via the existing
+  location picker (`CitySearchScreen`, tap the app bar location chip). Don't revert
+  to auto-requesting GPS on first launch without asking again.
 - **AdMob real IDs, the release signing keystore, and re-enabling R8 minification are
   all deliberately still open/undecided** as of 2026-08-06 — each was asked about
   individually and none were confirmed (the AskUserQuestion prompts were dismissed or
