@@ -119,8 +119,10 @@ is done — move it into "Done" rather than leaving it ambiguous.
       `prayer_times_screen.dart`, computed from the existing 30-second `Timer`
       rebuild ticker. New `remainingHoursMinutes`/`remainingMinutes` string keys in
       `app_strings.dart` (ar/en, `{h}`/`{m}` placeholders). `flutter analyze` +
-      `dart run custom_lint` + `flutter test` all green. **Not yet verified live on
-      a device** — only static-checked so far.
+      `dart run custom_lint` + `flutter test` all green. **Verified live on the Mi
+      10** (2026-08-06, via wireless adb + a CI-built debug APK): Maghrib row showed
+      "الصلاة القادمة — متبقي 2 ساعة و25 دقيقة" correctly against the device's actual
+      clock/next-prayer time.
 - [x] **Synced the HTML design mockup** (the "معاينة تطبيق مواقيت الصلاة والقبلة"
       Artifact) with the real app: it was missing the Hijri/Gregorian date header that
       `prayer_times_screen.dart`'s `_DateHeader` already renders. Added a matching
@@ -221,7 +223,10 @@ listed separately at the bottom since "effort" doesn't mean the same thing for t
       tapping the bottom nav both work and stay in sync. Watch for: RTL (Arabic swipe
       direction should feel natural, not mirrored wrong), and the Qibla screen's
       compass/gesture handling shouldn't fight with horizontal swipe.
-- [ ] **Don't require a live GPS fix at every app startup.** Right now
+- [ ] **Don't require a live GPS fix at every app startup.** **Live-confirmed as bad
+      UX on the Mi 10 (2026-08-06)**: a fresh install shows nothing but a blank
+      "location permission needed" screen until GPS resolves — no cached prayer times,
+      no prior screen state, just an empty blocking wait. Right now
       `_bootstrap()` in `lib/screens/home_shell.dart` only skips the GPS call when a
       *manual* (city-search) location was saved; otherwise it always calls
       `LocationService.getCurrentLocation()`, which blocks on a fresh

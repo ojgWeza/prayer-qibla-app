@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
@@ -69,9 +71,36 @@ class _HomeShellState extends State<HomeShell> {
       _manualLocationName = manual.name;
       if (mounted) setState(() => _locationState = LocationState.granted);
       _recomputeTimesAndQibla();
+      return;
+    }
+
+    final cached = await _prefs.getCachedGpsLocation();
+    if (cached != null) {
+      // Show times instantly from the last known fix instead of blocking
+      // startup on a fresh GPS call, then quietly refresh in the background.
+      _latitude = cached.latitude;
+      _longitude = cached.longitude;
+      if (mounted) setState(() => _locationState = LocationState.granted);
+      _recomputeTimesAndQibla();
+      unawaited(_backgroundLocationRefresh());
     } else {
       await _refreshLocation();
     }
+  }
+
+  /// Refreshes the GPS fix without disturbing an already-showing cached
+  /// location on failure -- used on startup once cached coordinates are
+  /// already on screen, so a denied/disabled result shouldn't blank the UI.
+  Future<void> _backgroundLocationRefresh() async {
+    final result = await _locationService.getCurrentLocation();
+    if (!mounted) return;
+    final position = result.position;
+    if (position == null) return;
+
+    _latitude = position.latitude;
+    _longitude = position.longitude;
+    await _prefs.setCachedGpsLocation(position.latitude, position.longitude);
+    _recomputeTimesAndQibla();
   }
 
   Future<void> _refreshLocation() async {
@@ -83,6 +112,7 @@ class _HomeShellState extends State<HomeShell> {
 
     _latitude = position.latitude;
     _longitude = position.longitude;
+    await _prefs.setCachedGpsLocation(position.latitude, position.longitude);
     _recomputeTimesAndQibla();
   }
 

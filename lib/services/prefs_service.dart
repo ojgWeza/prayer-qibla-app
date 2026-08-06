@@ -10,6 +10,8 @@ class PrefsService {
   static const _keyManualLat = 'manual_location_lat';
   static const _keyManualLon = 'manual_location_lon';
   static const _keyManualName = 'manual_location_name';
+  static const _keyCachedGpsLat = 'cached_gps_lat';
+  static const _keyCachedGpsLon = 'cached_gps_lon';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
@@ -59,6 +61,22 @@ class PrefsService {
     await prefs.remove(_keyManualLat);
     await prefs.remove(_keyManualLon);
     await prefs.remove(_keyManualName);
+  }
+
+  /// The last GPS fix, cached so startup can show times instantly instead of
+  /// blocking on a fresh `Geolocator.getCurrentPosition()` call every launch.
+  Future<({double latitude, double longitude})?> getCachedGpsLocation() async {
+    final prefs = await _prefs;
+    final lat = prefs.getDouble(_keyCachedGpsLat);
+    final lon = prefs.getDouble(_keyCachedGpsLon);
+    if (lat == null || lon == null) return null;
+    return (latitude: lat, longitude: lon);
+  }
+
+  Future<void> setCachedGpsLocation(double latitude, double longitude) async {
+    final prefs = await _prefs;
+    await prefs.setDouble(_keyCachedGpsLat, latitude);
+    await prefs.setDouble(_keyCachedGpsLon, longitude);
   }
 }
 
