@@ -45,6 +45,7 @@ Future<void> updateNextPrayerWidget({
           },
   ];
 
+  await HomeWidget.saveWidgetData<String>('language', language);
   await HomeWidget.saveWidgetData<String>(
     'next_prayer_header',
     AppStrings.forLanguage(language, 'nextPrayer'),

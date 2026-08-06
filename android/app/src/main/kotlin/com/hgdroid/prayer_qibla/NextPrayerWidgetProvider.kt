@@ -3,6 +3,7 @@ package com.hgdroid.prayer_qibla
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -26,6 +27,12 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
     ) {
         val header = widgetData.getString("next_prayer_header", null)
             ?: context.getString(R.string.widget_default_header)
+        // RemoteViews is inflated by the launcher process using the *system*
+        // locale, not Flutter's in-app language override, so supportsRtl
+        // alone can't mirror this widget for the app's own Arabic setting.
+        // Set layoutDirection explicitly from the language the app actually
+        // pushed instead of relying on automatic system-locale mirroring.
+        val isRtl = widgetData.getString("language", "ar") == "ar"
         val scheduleJson = widgetData.getString("prayer_schedule_json", null)
         // Localized "{h} hours & {m} minutes remaining" / "{m} minutes
         // remaining" templates, pushed from the same AppStrings entries the
@@ -61,6 +68,11 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
 
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.next_prayer_widget)
+            views.setInt(
+                R.id.widget_root,
+                "setLayoutDirection",
+                if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR,
+            )
             views.setTextViewText(R.id.widget_header, header)
             views.setTextViewText(R.id.widget_prayer_name, prayerLabel)
             views.setTextViewText(R.id.widget_prayer_time, prayerTime)

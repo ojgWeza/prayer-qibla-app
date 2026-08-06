@@ -4,6 +4,7 @@
      stripe on the leading edge, a small gold seal icon, a label + prayer
      name column, and a time + countdown column at the trailing edge. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background">
