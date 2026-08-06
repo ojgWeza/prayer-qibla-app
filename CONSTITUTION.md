@@ -330,8 +330,15 @@ session doesn't pay the same cost.
   `curl -s https://www.githubstatus.com/api/v2/status.json` if a dispatched run sits
   in `queued` far longer than the usual ~7-10 min, or fails immediately with
   `Service Unavailable` while resolving action downloads (as opposed to failing
-  inside an actual build step). Not our code/config when this happens — just
-  re-dispatch once the status page clears, don't start debugging the workflow file.
+  inside an actual build step). Confirmed 2026-08-06: during one such "Minor Service
+  Outage" window, three straight `workflow_dispatch` runs against the same unchanged
+  commit all failed on pure infra grounds — one on `Service Unavailable` resolving
+  action downloads, one on `The job was not acquired by Runner of type hosted even
+  after multiple attempts` (sat `queued` 15+ min, never started), before a later
+  redispatch finally got a runner. Not our code/config when this happens — don't
+  start debugging the workflow file after just one or two failures during a known
+  outage window; keep re-dispatching (checking githubstatus.com between attempts)
+  until one actually gets a runner.
 
 ### External images / design assets
 - **Look at any candidate image yourself (Read tool) before using it.** A text-based

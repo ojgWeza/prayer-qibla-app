@@ -239,16 +239,20 @@ is done — move it into "Done" rather than leaving it ambiguous.
       driven by the app's actual language choice rather than system config or a
       hardcoded order — works correctly if the user ever switches language too.
       `flutter analyze`/`custom_lint`/`flutter test` all green (Kotlin side can only
-      be checked by a real Gradle build). **NOT yet live-verified** — a CI build was
-      dispatched (run `31119004460`) but GitHub Actions was hit by a **platform-wide
-      outage** (confirmed via githubstatus.com, "Minor Service Outage") right as this
-      session ended: the run sat `queued` for 14+ minutes and a duplicate dispatch
-      failed with `Service Unavailable` resolving action downloads — not our code.
-      **Next session: check `gh run list --branch feature/home-screen-widget` first;
-      if `31119004460` finished, download the APK and verify live on the Mi 10
-      (icon should now render on the right, time/countdown on the left, in Arabic)
-      before touching anything else on this branch. If it's still stuck/failed from
-      the outage, just re-dispatch.**
+      be checked by a real Gradle build). **NOT yet live-verified** — GitHub Actions
+      was hit by a **platform-wide outage** this session (confirmed via
+      githubstatus.com, "Minor Service Outage"): two dispatch attempts (`31119000914`,
+      `31119004460`) both failed on infra grounds, not our code — one on
+      `Service Unavailable` resolving action downloads, the other on
+      `The job was not acquired by Runner of type hosted even after multiple
+      attempts`. A third build was re-dispatched as run **`31119995664`** right as
+      this session ended, outcome unknown (outage was still showing "minor" on
+      githubstatus.com at dispatch time). **Next session: check
+      `gh run list --branch feature/home-screen-widget --limit 5` first. If
+      `31119995664` (or a later one) succeeded, download the APK and verify live on
+      the Mi 10 — icon should now render on the right, time/countdown on the left, in
+      Arabic — before touching anything else on this branch. If it also failed on
+      infra grounds, just re-dispatch (check githubstatus.com first).**
 
 ## Not started yet — ordered easiest → hardest 📋
 
