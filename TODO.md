@@ -90,6 +90,22 @@ is done — move it into "Done" rather than leaving it ambiguous.
       `CONSTITUTION.md` § 6 for the full decision record. Notifications currently fire
       for all 5 notifiable prayers unconditionally in the meantime (no muting at all
       until the redesign lands).
+- [x] **Android home screen widget** (`feature/home-screen-widget` branch) — shows the
+      next upcoming prayer without opening the app. Uses the `home_widget` package +
+      a native `NextPrayerWidgetProvider` (`AppWidgetProvider`, not tied to the Flutter
+      engine); `widget_service.dart` pushes the full rolling schedule (label, epoch
+      millis, pre-formatted display time, all in the current language/time-format) as
+      JSON whenever `home_shell.dart` recomputes prayer times. The native side just
+      picks the first entry not yet in the past, so Android's own periodic widget
+      refresh (`updatePeriodMillis`) keeps it correct across a stretch of days without
+      the app being reopened. Verified live on the Mi 10:
+      - Went through two real design bugs found by actually looking at it on-device
+        (not just reading the XML) — see `CONSTITUTION.md` § 4 for both root causes.
+      - Carries a faded version of the app's existing seal motif (ring + eight-point
+        star, reused from the generated launcher icon asset) as a background watermark,
+        mocked up first as an HTML preview and approved before touching the real
+        Android layout, to avoid burning more CI/device round-trips on a design that
+        might still be wrong.
 
 ## In progress / needs attention right now 🔄
 
@@ -121,8 +137,6 @@ app actually does.
       new shape, just the UI grouping changes — no need to redesign storage, only
       display). Wire back into `home_shell.dart`'s `scheduleUpcoming(isEnabled: ...)`,
       which currently just returns `true` unconditionally.
-- [ ] **Android home screen widget** — shows the next prayer without opening the app
-      (needs the `home_widget` package + a Kotlin `AppWidgetProvider` + XML layout)
 - [ ] Consider continuous/background location watching instead of the current
       fetch-once-at-startup + manual-refresh-only model, if one-shot GPS + pull-to-
       refresh + the manual city picker turns out not to be enough in practice
@@ -143,14 +157,22 @@ app actually does.
 - [ ] Decide on a final app name (still just "prayer_qibla" / `com.hgdroid.prayer_qibla`)
 - [ ] Write a Privacy Policy (required by Google for any app using AdMob + location)
 - [ ] Real screenshots + Play Store listing copy
-- [ ] Finalize `applicationId` (currently `com.hgdroid.prayer_qibla`)
+- [x] Finalize `applicationId` — **decided (2026-08-06): keep `com.hgdroid.prayer_qibla`**,
+      no change. This can never be changed after the first Play Store upload.
 - [ ] Build with `--split-per-abi` to shrink the APK (currently ~53MB, large for a
       "lightweight" app)
+- [ ] AdMob real IDs, release keystore, and R8 re-enablement are all still **open** —
+      asked the user about each individually (2026-08-06); none were confirmed yet
+      (dismissed / not answered). Re-ask before assuming a default for any of them.
 
 ### Open decisions
 - [ ] Keep iOS in scope, or officially drop it and go Android-only? (original scope was
       Android-only)
-- [ ] When to pay the one-time $25 Google Play Console fee — now or closer to launch?
+- [x] Google Play Console account: **created and the $25 fee paid (2026-08-06)**, using
+      an account the user believes predates the November 2023 cutoff for the
+      20-tester/14-day closed-testing requirement — identity verification was still
+      pending as of this session. Confirm in Console whether the testing-requirement
+      banner actually applies before assuming production publishing is unlocked.
 
 ## Notes
 

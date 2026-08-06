@@ -69,6 +69,8 @@ lib/
                                  hand-rolled Gregorian names to avoid intl locale init)
     prefs_service.dart        — all local persistence (SharedPreferences)
     ad_service.dart           — AdMob init
+    widget_service.dart       — pushes the rolling prayer schedule to the Android
+                                 home screen widget (see below)
   screens/
     home_shell.dart           — owns all shared state, passes it down as props
     prayer_times_screen.dart  — includes the Hijri/Gregorian date header
@@ -83,6 +85,18 @@ lib/
                                 ring, engraved ticks, cardinal letters, medallion,
                                 two-tone needle — replaces a bare Icons.navigation
 ```
+
+**Android home screen widget** (added 2026-08-06): a native `NextPrayerWidgetProvider`
+(`android/app/src/main/kotlin/.../NextPrayerWidgetProvider.kt`, extends the `home_widget`
+plugin's `HomeWidgetProvider`) plus `next_prayer_widget.xml` / `next_prayer_widget_info.xml`
+/ `widget_background.xml` under `android/app/src/main/res/`. It is intentionally
+Flutter-engine-independent: `widget_service.dart` pushes the whole rolling schedule
+(today + several days ahead, mirroring the notification window) as JSON whenever
+`home_shell.dart` recomputes prayer times; the native provider's job is only to find
+the first entry whose timestamp hasn't passed yet and render it, so Android's own
+periodic `updatePeriodMillis` refresh keeps the widget honest even when the app isn't
+opened. The widget reuses `@drawable/ic_launcher_foreground` (the generated seal motif)
+at low opacity as a background watermark rather than any new art asset.
 
 `home_shell.dart` is the single source of truth for state (location, prayer times,
 settings). No external state management library (Provider/Riverpod/Bloc) — the app isn't
@@ -148,6 +162,34 @@ session doesn't pay the same cost.
   operate on the underlying instant regardless of the `isUtc` flag — only on-screen
   digits were ever wrong, not next-prayer detection or notification scheduling.
 
+### Android home screen widgets (RemoteViews)
+- **A `TextView` whose width is expanded via `layout_weight` will right-align Arabic
+  text inside that expanded box**, even though the box itself sits on the left in an
+  LTR layout — Android's per-TextView `textDirection` auto-detects RTL script content
+  independently of the parent `layoutDirection`. The visible symptom: a big dead gap
+  on one side that gets worse the more the widget is resized, with text clumped
+  against whatever's next to it. Root-caused by actually looking at a screenshot from
+  the device, not by reading the XML. Fix: don't use `layout_weight` to expand a text
+  box that might hold bilingual content — use `wrap_content` and center the whole
+  block (`android:gravity="center"` on the parent) instead of stretching one piece of
+  it.
+- **Mock up a widget redesign as an HTML/image preview before touching the real XML
+  and burning another CI-build-plus-device-install cycle** — the user explicitly asked
+  for this after the first fix still didn't look right live. A `mcp__visualize`
+  preview using the actual brand hex colors (not a claude.ai theme) is close enough to
+  align on layout/art direction before spending the ~5-10 minute real round-trip.
+- Reuse `@drawable/ic_launcher_foreground` (the generated seal-motif PNG, already
+  exists per-density from `flutter_launcher_icons`) for decorative watermarks instead
+  of hand-authoring new vector art — same principle as the in-app `star_watermark.dart`
+  treatment, just via a plain low-`android:alpha` `ImageView` in a `FrameLayout` this
+  time since RemoteViews can't run a `CustomPainter`.
+- `RemoteViews` only supports a limited set of layout/view classes (`FrameLayout`,
+  `LinearLayout`, `RelativeLayout`, `GridLayout` as containers;
+  `TextView`/`ImageView`/`Button`/etc. as leaves) — but static XML attributes like
+  `android:alpha`, `android:scaleType`, and negative `layout_marginEnd` are all honored
+  at inflate time with zero extra Kotlin code, since they're baked into the layout
+  resource rather than being a per-update `RemoteViews.setXxx(...)` reflective call.
+
 ### Local device testing (no Android Studio on this machine)
 - `adb` was installed standalone — just the `platform-tools` zip from
   `dl.google.com/android/repository/platform-tools-latest-windows.zip` (~8MB), not the
@@ -175,6 +217,26 @@ session doesn't pay the same cost.
   asked for a real device instead. It's also a dead end for this project regardless of
   preference: Claude's browser-automation file upload caps at 10MB, and both the debug
   and release APKs are far larger.
+- **The "fresh ephemeral debug keystore per CI run" issue (see above) applies to DEBUG
+  builds too, not just release** — confirmed empirically 2026-08-06: two back-to-back
+  `workflow_dispatch` builds of the same feature branch, both debug-only, still
+  produced mismatched signatures. `adb install` on top of an existing install from a
+  different CI run reliably fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`; always
+  `adb uninstall <package>` first when installing a fresh CI artifact, even for debug.
+  Uninstalling wipes app data, which also removes any placed home screen widget and
+  the `home_widget` SharedPreferences data behind it — the app has to be reopened once
+  after every reinstall before a widget will show real data again.
+- **`adb` commands run from this project's Bash tool (git-bash/MSYS) mangle any
+  argument that starts with a single `/`** — including the remote device path in
+  `adb push <local> /sdcard/...` or `adb shell <cmd> /sdcard/...` — silently rewriting
+  it into a Windows path (e.g. `/sdcard/Download` → `C:/Program Files/Git/sdcard/Download`)
+  before it ever reaches adb. The command can appear to fail loudly (`ls: C:/Program:
+  No such file or directory`) or, worse, appear to succeed with a plausible byte count
+  while writing nowhere useful — always verify with a second `ls`. Fix: prefix the
+  *remote* path only with an extra leading slash (`//sdcard/Download/...`) to defeat
+  the MSYS conversion for that one argument. Don't reach for
+  `MSYS_NO_PATHCONV=1` globally — that also disables conversion of the *local* file
+  path argument, which then fails to resolve instead.
 
 ### GitHub / gh CLI
 - If `git push` is rejected for touching `.github/workflows/*.yml` with "OAuth App...
@@ -185,6 +247,23 @@ session doesn't pay the same cost.
 - Downloading GitHub Actions artifacts requires being logged in. To hand someone a
   no-login direct download link, cut a **GitHub Release** and attach the APK as an
   asset (`gh release create ... path/to.apk`).
+- `gh` is installed on this machine at `C:\Program Files\GitHub CLI\gh.exe`, already
+  authenticated with the `workflow` scope — but it is **not on PATH** in this shell
+  session (bash *or* PowerShell both say "command not found"). Invoke it by full path
+  (`& "C:\Program Files\GitHub CLI\gh.exe" ...` in PowerShell, or the equivalent
+  `/c/Program Files/GitHub CLI/gh.exe` in bash) rather than assuming it's missing.
+- `build.yml`'s `push` trigger only fires for `master`/`main` — pushing a feature
+  branch alone does **not** start a CI build. To get a CI-built APK for a feature
+  branch without opening a PR (e.g. just to test on-device before merging), push the
+  branch then manually dispatch: `gh workflow run "Build APK" --ref <branch-name>`
+  (the workflow already declares `workflow_dispatch:`). Get the run ID from the
+  printed URL, then `gh run watch <id> --exit-status` to block until it finishes and
+  `gh run download <id> -D <dir>` to pull the artifact. Only the debug APK gets built
+  this way — the release APK step is gated to pushes on `master`/`main` specifically.
+- **Never try to extract the stored git/gh credential (e.g. `git credential fill`) to
+  build a raw API call** — this is correctly blocked by the auto-mode classifier. If
+  `gh` seems unavailable, look for it installed elsewhere (see above) before reaching
+  for credential extraction as a workaround.
 
 ### External images / design assets
 - **Look at any candidate image yourself (Read tool) before using it.** A text-based
@@ -254,3 +333,12 @@ session doesn't pay the same cost.
   `home_shell.dart` fires all 5 notifiable prayers unconditionally
   (`isEnabled: (weekday, prayer) => true`); there is currently no per-prayer/per-day
   muting at all until the redesign lands.
+- **`applicationId` is finalized (2026-08-06): staying on `com.hgdroid.prayer_qibla`,
+  no rename.** Explicitly confirmed with the user, since this can never change again
+  after the first Play Store upload. Don't revisit this without a strong new reason —
+  a change now would mean starting over as a brand-new Play Store listing.
+- **AdMob real IDs, the release signing keystore, and re-enabling R8 minification are
+  all deliberately still open/undecided** as of 2026-08-06 — each was asked about
+  individually and none were confirmed (the AskUserQuestion prompts were dismissed or
+  the user redirected to something else first). Don't assume a default for any of
+  these three; ask again before acting on them.
