@@ -77,6 +77,15 @@ class AppStrings {
       'ar': 'البحث محتاج إنترنت مرة واحدة بس، بعدها المواقيت بتتحسب في الجهاز بدون نت',
       'en': 'Searching needs internet once — after that, times are computed fully offline',
     },
+    // {h}/{m} placeholders are substituted in code (see _formatRemaining).
+    'remainingHoursMinutes': {
+      'ar': 'متبقي {h} ساعة و{m} دقيقة',
+      'en': '{h} hours & {m} minutes remaining',
+    },
+    'remainingMinutes': {
+      'ar': 'متبقي {m} دقيقة',
+      'en': '{m} minutes remaining',
+    },
   };
 
   static String of(BuildContext context, String key) {

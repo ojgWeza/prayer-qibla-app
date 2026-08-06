@@ -79,6 +79,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     final nextKey = _nextPrayerKey(times);
     final today = DateTime.now();
+    final remainingText = nextKey == null
+        ? null
+        : _formatRemaining(
+            context,
+            times.ordered
+                .firstWhere((entry) => entry.key == nextKey)
+                .value
+                .difference(today),
+          );
 
     return Column(
       children: [
@@ -99,6 +108,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                     time: entry.value,
                     highlighted: entry.key == nextKey,
                     use24HourFormat: widget.use24HourFormat,
+                    remainingText:
+                        entry.key == nextKey ? remainingText : null,
                   ),
               ],
             ),
@@ -136,6 +147,22 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
+/// Formats a countdown to the next prayer, e.g. "4 hours & 46 minutes
+/// remaining" or "12 minutes remaining" once under an hour. Clamps negative
+/// durations (the boundary moment right as a prayer time passes) to zero.
+String _formatRemaining(BuildContext context, Duration remaining) {
+  final clamped = remaining.isNegative ? Duration.zero : remaining;
+  final hours = clamped.inHours;
+  final minutes = clamped.inMinutes % 60;
+  if (hours > 0) {
+    return AppStrings.of(context, 'remainingHoursMinutes')
+        .replaceFirst('{h}', '$hours')
+        .replaceFirst('{m}', '$minutes');
+  }
+  return AppStrings.of(context, 'remainingMinutes')
+      .replaceFirst('{m}', '$minutes');
+}
+
 int _hour12(int hour24) {
   final h = hour24 % 12;
   return h == 0 ? 12 : h;
@@ -146,12 +173,14 @@ class _PrayerRow extends StatelessWidget {
   final DateTime time;
   final bool highlighted;
   final bool use24HourFormat;
+  final String? remainingText;
 
   const _PrayerRow({
     required this.label,
     required this.time,
     required this.highlighted,
     required this.use24HourFormat,
+    this.remainingText,
   });
 
   @override
@@ -169,7 +198,11 @@ class _PrayerRow extends StatelessWidget {
         title: Text(label, style: theme.textTheme.titleMedium),
         trailing: Text(timeStr, style: theme.textTheme.titleLarge),
         subtitle: highlighted
-            ? Text(AppStrings.of(context, 'nextPrayer'))
+            ? Text(
+                remainingText == null
+                    ? AppStrings.of(context, 'nextPrayer')
+                    : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
+              )
             : null,
       ),
     );
