@@ -19,7 +19,7 @@
     <!-- Sizes are scaled well past the mockup's phone-preview card on
          purpose: launcher hosts grant widget space in whole grid cells, so
          this box can't be shrunk below roughly one row no matter how small
-         minHeight is declared -- content has to fill that row properly
+         minHeight is declared. Content has to fill that row properly
          instead, rather than leaving two small lines floating in mostly
          empty space (this is what the user flagged live, 2026-08-06). -->
     <LinearLayout
