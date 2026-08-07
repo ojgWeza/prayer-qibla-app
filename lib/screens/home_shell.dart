@@ -9,8 +9,10 @@ import '../services/notification_service.dart';
 import '../services/prayer_times_service.dart';
 import '../services/prefs_service.dart';
 import '../services/widget_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/star_watermark.dart';
 import 'city_search_screen.dart';
+import 'notification_grid_screen.dart';
 import 'prayer_times_screen.dart';
 import 'qibla_screen.dart';
 import 'settings_screen.dart';
@@ -23,8 +25,13 @@ const _defaultLongitude = 31.2357;
 
 class HomeShell extends StatefulWidget {
   final ValueChanged<Locale> onLocaleChanged;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
-  const HomeShell({super.key, required this.onLocaleChanged});
+  const HomeShell({
+    super.key,
+    required this.onLocaleChanged,
+    required this.onThemeModeChanged,
+  });
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -50,11 +57,29 @@ class _HomeShellState extends State<HomeShell> {
   bool _use24HourFormat = true;
   String _calculationMethod = 'egyptian';
   String _madhab = 'shafi';
+  String _appearanceMode = 'afterMaghrib';
+  int _weekStart = 5;
+  bool _notificationsEnabled = true;
+
+  Timer? _appearanceTicker;
 
   @override
   void initState() {
     super.initState();
     _bootstrap();
+    // The 'afterMaghrib' appearance mode flips purely with wall-clock time
+    // (no other state change triggers a rebuild at the moment Maghrib/Fajr
+    // passes), so a light periodic tick keeps it accurate.
+    _appearanceTicker = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _applyAppearance(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _appearanceTicker?.cancel();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -62,10 +87,14 @@ class _HomeShellState extends State<HomeShell> {
     _use24HourFormat = await _prefs.getUse24HourFormat();
     _calculationMethod = await _prefs.getCalculationMethod();
     _madhab = await _prefs.getMadhab();
+    _appearanceMode = await _prefs.getAppearanceMode();
+    _weekStart = await _prefs.getWeekStart();
+    _notificationsEnabled = await _prefs.getNotificationsEnabled();
     if (mounted) {
       widget.onLocaleChanged(Locale(_language));
       setState(() {});
     }
+    _applyAppearance();
 
     await _notificationService.init();
     await _notificationService.requestPermission();
@@ -153,19 +182,67 @@ class _HomeShellState extends State<HomeShell> {
       _qiblaBearing = bearing;
     });
 
-    _notificationService.scheduleUpcoming(
-      upcomingDays,
-      // Per-day/per-prayer muting was removed pending a redesign (see
-      // TODO.md) -- every notifiable prayer fires for now.
-      isEnabled: (weekday, prayer) => true,
-      labelFor: (key) => AppStrings.forLanguage(_language, key),
-    );
+    _rescheduleNotifications(upcomingDays);
+    _applyAppearance();
 
     updateNextPrayerWidget(
       upcomingDays: upcomingDays,
       language: _language,
       use24HourFormat: _use24HourFormat,
     );
+  }
+
+  Future<void> _rescheduleNotifications(
+    List<DailyPrayerTimes> upcomingDays,
+  ) async {
+    if (!_notificationsEnabled) {
+      await _notificationService.cancelAll();
+      return;
+    }
+    final enabledFlags = await Future.wait([
+      for (final times in upcomingDays)
+        for (final entry in times.ordered)
+          if (notifiablePrayers.contains(entry.key))
+            _prefs
+                .getNotifDayEnabled(times.fajr.weekday, entry.key)
+                .then((v) => MapEntry('${times.fajr.weekday}_${entry.key}', v)),
+    ]);
+    final enabledMap = Map.fromEntries(enabledFlags);
+
+    await _notificationService.scheduleUpcoming(
+      upcomingDays,
+      isEnabled: (weekday, prayer) =>
+          enabledMap['${weekday}_$prayer'] ?? true,
+      labelFor: (key) => AppStrings.forLanguage(_language, key),
+    );
+  }
+
+  /// Computes the effective `ThemeMode` for the current `_appearanceMode`
+  /// and pushes it up to `MaterialApp`. For `'afterMaghrib'`, dark runs from
+  /// today's Maghrib to tomorrow's Fajr, derived from the already-computed
+  /// prayer times rather than a fixed clock time.
+  void _applyAppearance() {
+    switch (_appearanceMode) {
+      case 'light':
+        widget.onThemeModeChanged(ThemeMode.light);
+        return;
+      case 'dark':
+        widget.onThemeModeChanged(ThemeMode.dark);
+        return;
+      case 'system':
+        widget.onThemeModeChanged(ThemeMode.system);
+        return;
+      case 'afterMaghrib':
+      default:
+        final times = _prayerTimes;
+        if (times == null) {
+          widget.onThemeModeChanged(ThemeMode.system);
+          return;
+        }
+        final now = DateTime.now();
+        final isDark = now.isAfter(times.maghrib) || now.isBefore(times.fajr);
+        widget.onThemeModeChanged(isDark ? ThemeMode.dark : ThemeMode.light);
+    }
   }
 
   Future<void> _openLocationPicker() async {
@@ -219,6 +296,63 @@ class _HomeShellState extends State<HomeShell> {
     _recomputeTimesAndQibla();
   }
 
+  void _onAppearanceModeChanged(String mode) {
+    setState(() => _appearanceMode = mode);
+    _prefs.setAppearanceMode(mode);
+    _applyAppearance();
+  }
+
+  void _onWeekStartChanged(int weekStart) {
+    setState(() => _weekStart = weekStart);
+    _prefs.setWeekStart(weekStart);
+  }
+
+  void _onNotificationsEnabledChanged(bool enabled) {
+    setState(() => _notificationsEnabled = enabled);
+    _prefs.setNotificationsEnabled(enabled);
+    final times = _prayerTimes;
+    if (times == null) return;
+    final today = DateTime.now();
+    final upcomingDays = [
+      for (var offset = 0; offset < 7; offset++)
+        computePrayerTimes(
+          latitude: _latitude!,
+          longitude: _longitude!,
+          date: today.add(Duration(days: offset)),
+          methodKey: _calculationMethod,
+          madhabKey: _madhab,
+        ),
+    ];
+    _rescheduleNotifications(upcomingDays);
+  }
+
+  Future<void> _openNotificationGrid() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationGridScreen(
+          language: _language,
+          weekStart: _weekStart,
+        ),
+      ),
+    );
+    // The grid persists directly to PrefsService; re-derive the schedule
+    // with whatever the user changed once they come back.
+    final times = _prayerTimes;
+    if (times == null || _latitude == null || _longitude == null) return;
+    final today = DateTime.now();
+    final upcomingDays = [
+      for (var offset = 0; offset < 7; offset++)
+        computePrayerTimes(
+          latitude: _latitude!,
+          longitude: _longitude!,
+          date: today.add(Duration(days: offset)),
+          methodKey: _calculationMethod,
+          madhabKey: _madhab,
+        ),
+    ];
+    _rescheduleNotifications(upcomingDays);
+  }
+
   @override
   Widget build(BuildContext context) {
     final locationLabel = _manualLocationName ??
@@ -235,6 +369,7 @@ class _HomeShellState extends State<HomeShell> {
       QiblaScreen(
         locationState: _locationState,
         qiblaBearing: _qiblaBearing,
+        language: _language,
         onRetryLocation: _refreshLocation,
       ),
       SettingsScreen(
@@ -243,48 +378,92 @@ class _HomeShellState extends State<HomeShell> {
         calculationMethod: _calculationMethod,
         madhab: _madhab,
         locationLabel: locationLabel,
+        appearanceMode: _appearanceMode,
+        weekStart: _weekStart,
+        notificationsEnabled: _notificationsEnabled,
         onLanguageChanged: _onLanguageChanged,
         onTimeFormatChanged: _onTimeFormatChanged,
         onCalculationMethodChanged: _onCalculationMethodChanged,
         onMadhabChanged: _onMadhabChanged,
         onChangeLocation: _openLocationPicker,
+        onAppearanceModeChanged: _onAppearanceModeChanged,
+        onWeekStartChanged: _onWeekStartChanged,
+        onNotificationsEnabledChanged: _onNotificationsEnabledChanged,
+        onCustomizeByDay: _openNotificationGrid,
       ),
     ];
 
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.of(context, 'appName')),
+        title: Stack(
+          alignment: AlignmentDirectional.centerStart,
+          children: [
+            PositionedDirectional(
+              top: 6,
+              bottom: 6,
+              start: -2,
+              width: 96,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppTheme.accent300.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 2),
+              child: Text(AppStrings.of(context, 'appName')),
+            ),
+          ],
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Icon(
+              isDark ? Icons.dark_mode : Icons.light_mode,
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(40),
+          preferredSize: const Size.fromHeight(44),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: InkWell(
               onTap: _openLocationPicker,
-              borderRadius: const BorderRadius.all(Radius.circular(8)),
-              child: Row(
-                children: [
-                  Icon(Icons.place_outlined, size: 18, color: onPrimary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      locationLabel,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(color: onPrimary),
+              borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  border: Border.all(color: theme.colorScheme.outline),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.place_outlined,
+                        size: 18, color: AppTheme.accent700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        locationLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium,
+                      ),
                     ),
-                  ),
-                  Text(
-                    AppStrings.of(context, 'change'),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: onPrimary.withValues(alpha: 0.85),
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
+                    Text(
+                      AppStrings.of(context, 'change'),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppTheme.accent700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

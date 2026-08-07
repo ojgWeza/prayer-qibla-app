@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -23,6 +24,10 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   }
 
   void _loadAd() {
+    // google_mobile_ads has no web implementation -- AdMob is Android/iOS
+    // only for this app; stay hidden on web instead of hitting a missing
+    // platform channel.
+    if (kIsWeb) return;
     final ad = BannerAd(
       adUnitId: AdIds.bannerAdUnitId,
       size: AdSize.banner,

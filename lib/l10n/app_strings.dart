@@ -87,6 +87,32 @@ class AppStrings {
       'en': '{m} minutes remaining',
     },
     'defaultLocationName': {'ar': 'القاهرة، مصر', 'en': 'Cairo, Egypt'},
+    'appearance': {'ar': 'المظهر', 'en': 'Appearance'},
+    'appearanceAfterMaghrib': {
+      'ar': 'تلقائي حسب الوقت (داكن بعد المغرب)',
+      'en': 'Follow the sun',
+    },
+    'appearanceLight': {'ar': 'فاتح دائماً', 'en': 'Always light'},
+    'appearanceDark': {'ar': 'داكن دائماً', 'en': 'Always dark'},
+    'appearanceSystem': {'ar': 'حسب النظام', 'en': 'Follow system'},
+    'weekStart': {'ar': 'بداية الأسبوع', 'en': 'Week starts on'},
+    'notificationsEnable': {
+      'ar': 'تفعيل تنبيهات الأذان',
+      'en': 'Enable prayer notifications',
+    },
+    'customizeByDay': {'ar': 'تخصيص حسب اليوم', 'en': 'Customize by day'},
+    'notificationGridTitle': {
+      'ar': 'تخصيص التنبيهات حسب اليوم',
+      'en': 'Customize notifications by day',
+    },
+    // Full weekday names, keyed by DateTime.weekday (1=Mon..7=Sun).
+    'fullDay1': {'ar': 'الإثنين', 'en': 'Monday'},
+    'fullDay2': {'ar': 'الثلاثاء', 'en': 'Tuesday'},
+    'fullDay3': {'ar': 'الأربعاء', 'en': 'Wednesday'},
+    'fullDay4': {'ar': 'الخميس', 'en': 'Thursday'},
+    'fullDay5': {'ar': 'الجمعة', 'en': 'Friday'},
+    'fullDay6': {'ar': 'السبت', 'en': 'Saturday'},
+    'fullDay7': {'ar': 'الأحد', 'en': 'Sunday'},
   };
 
   static String of(BuildContext context, String key) {

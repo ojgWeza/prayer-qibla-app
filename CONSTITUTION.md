@@ -113,6 +113,15 @@ source image; don't hand-edit the generated `android/app/src/main/res/mipmap-*` 
 design before touching Flutter code. It is NOT wired to the real app and can drift out
 of sync — see "Learnt lessons" below on how badly that drift can confuse feedback.
 
+**Design reference assets (`design/`) are gitignored, not committed.** The Organic
+design handoff (`design/Prayer times app design.zip` + its extracted
+`design_handoff_prayer_qibla_app/`) and the approved Claude-Design screenshots
+(`design/ScreenShots/*.png`) that this session's redesign (2026-08-07) was built
+against live under `design/`, which `.gitignore` excludes (line ~46, pre-existing rule,
+not added this session). **These files will NOT be present on a fresh clone** — if a
+future session needs to re-check something against the original design source, ask the
+user to re-supply `design/` rather than assuming it's still there.
+
 ## 4. Learnt lessons
 
 A living log. Add to this whenever something costs real time to figure out, so the next
@@ -382,6 +391,44 @@ session doesn't pay the same cost.
   also can't reach authenticated pages like private Claude artifacts. For anything that
   needs a real logged-in session or actual visual verification, use **Claude in Chrome**
   (the user's real browser) instead — confirmed working, including screenshots.
+- **Update (2026-08-07): the sandboxed `Claude_Browser` tool DOES work now** for
+  screenshotting a locally-served page (via `preview_start`/`navigate`/`computer
+  screenshot`) — used successfully this session to verify the real (not mockup) app.
+  What still doesn't work reliably: **clicking inside a Flutter-web CanvasKit canvas**.
+  `computer left_click` against Flutter web's bottom `NavigationBar` tabs consistently
+  timed out (30s) across ~6 attempts in two different sessions/builds, never actually
+  switching tabs (confirmed via screenshot after each attempt) — a tooling limitation,
+  not an app bug. If a future session needs to click through multiple screens of the
+  live app, don't burn time retrying clicks; either verify via a `flutter test` widget
+  test instead (see the `debugCompassStreamOverride` pattern in `qibla_screen.dart` /
+  `test/qibla_screen_test.dart` for how to make a screen path testable without a real
+  device/sensor), or fall back to a real Android emulator/device.
+- **Flutter web can be used purely as a verification tool for the real app's actual
+  rendering — do this instead of trusting a hand-maintained HTML mockup, which *will*
+  drift from the real Dart code no matter how carefully it's kept in sync.** Added via
+  `flutter create . --platforms=web` (creates a `web/` directory + lets
+  `.claude/launch.json` run `flutter run -d chrome`). **This app still ships
+  Android-only** — web is not a target platform, purely a local screenshot rig. Needed
+  `kIsWeb` guards around every call into a mobile-only plugin
+  (`google_mobile_ads`/`home_widget`/`flutter_local_notifications`/`flutter_timezone`
+  all have zero web implementation and throw `MissingPluginException` before `runApp()`
+  ever renders anything, leaving a blank white page) — see `ad_service.dart`,
+  `banner_ad_widget.dart`, `widget_service.dart`, `notification_service.dart`,
+  `main.dart`. This paid off immediately: running the real app surfaced two real bugs
+  invisible from reading source (oversized/blurry star watermark; Arabic text silently
+  falling back to the wrong font because Caprasimo has no Arabic glyphs) and one real
+  Dart logic bug unrelated to web at all (`QiblaScreen` spinning forever if the compass
+  stream never emits — genuinely also possible on a real Android device with no
+  magnetometer, not just on web).
+- **A `flutter run -d chrome` dev-server build is slow and flaky to script against**:
+  the "Waiting for connection from debug service on Chrome" handshake regularly took
+  45-90s, and repeated `navigate()` calls before that handshake finished caused
+  `WebSocketConnectionClosed`/`MissingPluginException` noise in the console that looked
+  like real bugs but wasn't. Always fully `preview_stop` + `preview_start` fresh
+  (don't just re-`navigate()` an existing tab) after a Dart source change — there's no
+  reliable hot-reload trigger available through these tools — and then wait for
+  `main.dart.js` to 200 *and* give it another several seconds beyond that before the
+  first screenshot.
 - Claude-in-Chrome's `file_upload` tool caps combined upload size at **10MB** — both
   this app's debug (~150MB+) and release (~55-60MB) APKs are far over that, so it can
   never be used to push an APK into a browser-based tool (e.g. Appetize.io). This is a

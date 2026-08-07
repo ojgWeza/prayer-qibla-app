@@ -6,6 +6,7 @@ import '../l10n/app_strings.dart';
 import '../services/date_service.dart';
 import '../services/location_service.dart';
 import '../services/prayer_times_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/banner_ad_widget.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
@@ -192,7 +193,13 @@ class _PrayerRow extends StatelessWidget {
             '${AppStrings.of(context, time.hour < 12 ? 'am' : 'pm')}';
     final theme = Theme.of(context);
     return Card(
-      color: highlighted ? theme.colorScheme.primaryContainer : null,
+      color: highlighted ? AppTheme.accent100 : null,
+      shape: highlighted
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              side: const BorderSide(color: AppTheme.accent300),
+            )
+          : null,
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         title: Text(label, style: theme.textTheme.titleMedium),
@@ -202,6 +209,8 @@ class _PrayerRow extends StatelessWidget {
                 remainingText == null
                     ? AppStrings.of(context, 'nextPrayer')
                     : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: AppTheme.accent700),
               )
             : null,
       ),

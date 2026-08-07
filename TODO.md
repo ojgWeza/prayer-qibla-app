@@ -170,6 +170,29 @@ is done — move it into "Done" rather than leaving it ambiguous.
 
 ## In progress / needs attention right now 🔄
 
+**Start here next session** (2026-08-07 session end — Organic redesign applied, gaps
+found and fixed by actually running the app, not just re-reading code):
+1. Re-run `flutter analyze` / `dart run custom_lint` / `flutter test` first, before
+   trusting anything below — confirm nothing regressed between sessions.
+2. Live-verify on a real Android device (not just the `flutter-web` verification rig):
+   Qibla screen (both the redesigned compass gauge AND the new timeout-based
+   `compassUnavailable` fallback don't false-trigger on a device that *does* have a
+   working compass), Settings screen (week-start dropdown, appearance radio group,
+   notification master toggle + "Customize by day" grid), and English/LTR — none of
+   these were confirmed live this session; only the Arabic/RTL Prayer Times screen was
+   (see the design-handoff section below for why).
+3. Decide whether to keep the `web/` directory + `.claude/launch.json` around as a
+   standing local verification tool (recommended — it caught 3 real bugs this session
+   that source-reading alone missed) or remove it if it turns out to be more friction
+   than it's worth long-term.
+4. This branch (`feature/home-screen-widget`) now carries two fairly different bodies
+   of work — the original Android home-widget feature, and this session's much larger
+   Organic design-system application — mixed together uncommitted. Consider with the
+   user whether to split before merging, per the "one branch per feature" rule in
+   `CONSTITUTION.md` § 2.4, rather than assuming either way.
+
+---
+
 - [ ] Confirm the 7-day rolling notification schedule actually fires correctly on a
       real device (so far only verified by static analysis/tests, not a live run)
 - [ ] Re-test pull-to-refresh on the Prayer Times screen actually recomputes times after
@@ -260,21 +283,215 @@ Ranked by implementation effort/risk, not by importance — pick from the top un
 specific item is more urgent. Pure business/content/decision items (not code) are
 listed separately at the bottom since "effort" doesn't mean the same thing for them.
 
+### From the "Organic" design handoff (`design/Prayer times app design.zip`, 2026-08-07)
+
+Compared the bundled design handoff (`design/extracted/design_handoff_prayer_qibla_app/`)
+against the real Flutter app, then implemented the gaps found (2026-08-07). All items
+below are now **done** except the home-widget visual-variant one, which stays open (see
+Not started yet).
+
+- [x] **Adopted the "Organic" design system tokens (colors/fonts/radii).** New
+      `lib/theme/app_theme.dart`: `ColorScheme`s built from the exact handoff hex values
+      (`--color-bg` `#f5ead8`/`#2e2b25`, `--color-surface` `#ebddc5`/`#474238`,
+      `--color-text` `#201e1d`/`#f5ead8`, terracotta/sage accent ramps), `google_fonts`
+      package added for Caprasimo (headings) + Figtree (body), pill (`StadiumBorder`)
+      shapes for `FilledButton`/`SegmentedButton`. Wired into `main.dart` as
+      `theme`/`darkTheme`. Next-prayer card in `prayer_times_screen.dart` now uses the
+      actual `accent-100`/`accent-300` tokens instead of the generic Material
+      `primaryContainer`.
+- [x] **4-mode appearance setting** (`appearanceMode`: `afterMaghrib`/`light`/`dark`/
+      `system`, default `afterMaghrib`). New `PrefsService.getAppearanceMode`/
+      `setAppearanceMode`; `home_shell.dart`'s `_applyAppearance()` computes `isDark`
+      from `_prayerTimes.maghrib`/`.fajr` each time prayer times recompute plus a 1-minute
+      `Timer.periodic` (so the mode flips even with no other state change), and pushes
+      the resolved `ThemeMode` up to `MaterialApp` via a new `onThemeModeChanged`
+      callback on `HomeShell`. Settings → Language & appearance has a `RadioGroup` of
+      the 4 options.
+- [x] **Week-start setting.** `PrefsService.getWeekStart`/`setWeekStart` (0=Monday..
+      6=Sunday, default 5/Saturday), new `fullDay1..7` string keys, dropdown added to
+      Settings → Time & calculation; the notification grid (below) reorders its day rows
+      from this same value.
+- [x] **Notifications: master toggle + dedicated "Customize by day" grid screen.**
+      `PrefsService.getNotificationsEnabled`/`setNotificationsEnabled` (master switch)
+      plus `getNotifDayEnabled`/`setNotifDayEnabled` (the `notif_day_${weekday}_$prayer`
+      per-cell grid). Settings has the master `SwitchListTile` + a "Customize by day" row
+      that opens the new full-screen `lib/screens/notification_grid_screen.dart`
+      (prayers as columns, days as rows in week-start order, checkbox chips with a
+      checkmark icon). `home_shell.dart`'s `_rescheduleNotifications()` now reads the
+      grid + master toggle before calling `NotificationService.scheduleUpcoming`,
+      replacing the old unconditional "everything fires" stand-in.
+- [x] **Qibla compass cardinal letters now follow the app language.** `QiblaCompass`
+      takes a `language` param (`qibla_compass.dart`), draws N/S/E/W in English mode and
+      ش/ج/ق/غ in Arabic mode instead of always-Arabic; wired through
+      `qibla_screen.dart` from `home_shell.dart`'s `_language`.
+      `flutter analyze` + `dart run custom_lint` + `flutter test` all green after every
+      change above. **Not yet live-verified on a device** — this pass was Flutter-side
+      only (no APK build/device run this session).
+- [ ] **Home-screen widget: only one visual variant exists** (still open — native
+      Android work, out of scope for this Flutter-side pass). Design specifies 3 widget
+      mockups (circular dark, circular light, rectangular light-with-sage-star); current
+      `home_widget`/`NextPrayerWidgetProvider` implementation only ships the one
+      rectangular card style. Overlaps with the existing "add a horizontal
+      5-prayer-row style" and "add a progress-bar style" widget TODO items below — worth
+      deciding as one combined "widget style picker" piece of work.
+- [x] **Corrected against the actual approved screenshots (2026-08-07, same day).** The
+      first redesign pass above was based only on the handoff's `README.md` prose, not
+      the real rendered design — user pointed out the result looked "so much different"
+      and pointed at `design/ScreenShots/*.png` (4 screenshots from the Claude Design
+      tool: prayer list, qibla gauge, widgets/icons, and the qibla screen in English).
+      Comparing against those directly surfaced real gaps the prose missed, fixed in the
+      same session:
+      - **Qibla compass fully repainted** (`qibla_compass.dart`): the screenshot shows a
+        sage↔terracotta gradient ring with tick marks, a fixed true-north dot, a cream
+        dial with a faint diamond medallion, and a wide chevron/arrowhead needle — not
+        the old brass ring + thin two-tone pointer. Rewrote the `CustomPainter`
+        accordingly.
+      - **Star watermark was tiled, should be one large corner emblem.**
+        `star_watermark.dart` had been (mis-)changed in an earlier session to a small
+        tiled repeat "to fix a mockup bug" — the actual approved design shows one big
+        low-opacity star anchored top-corner behind the app bar, exactly like the
+        original handoff prose said. Rewrote to a single `Align`ed emblem.
+      - **App bar didn't match**: screenshot shows a bold serif title with a terracotta
+        highlighter-style bar behind part of the text, plus a small moon/sun mode
+        indicator icon at the trailing edge. Added both to `home_shell.dart`'s `AppBar`.
+      - **Found and fixed a real bug while doing this**: the location pill was styled
+        with `colorScheme.onPrimary`, which in the new Organic theme resolves to cream —
+        against the app bar's now-also-cream background this made the location text
+        invisible. Restyled the pill as its own bordered card using `surface`/`outline`/
+        `accent-700` tokens directly instead of assuming a colored app bar.
+      - `flutter analyze` + `dart run custom_lint` + `flutter test` all still green after
+        these changes (INFO-level "missing const decoration" hints remain, same
+        dynamic-color false-positive class as before).
+      - **Artifact rebuilt a second time** to match the screenshots pixel-by-pixel where
+        feasible in HTML/CSS/SVG: bold serif type, the same qibla gauge redesign, a
+        tessellating eight-point-star SVG pattern (two overlapping squares, matching the
+        handoff's own construction) reused across the home-widget and app-icon
+        references instead of flat color chips, and the app-bar highlight/moon-icon
+        treatment. Republished to the same Artifact URL.
+      - **Not yet done**: the tessellating star-tile texture and the native
+        Android widget/icon assets themselves were only built in the Artifact/HTML
+        reference, not regenerated as real Flutter/Android assets (existing app icon and
+        home-widget background are still the older simple seal, not this tile pattern) —
+        call this out explicitly rather than assume it's covered by the earlier "only one
+        widget visual variant" TODO item below, since the actual texture design changed
+        too, not just the count of variants.
+      - **Second correction, same day**: user caught that the rectangular "PRAYERS"
+        widget's sage tile in the screenshot isn't just the star texture -- it also has
+        the qibla gauge's needle + true-north dot drawn on top of it (same motif as the
+        standalone Qibla widget, just smaller/embedded). Missed this on the first
+        artifact rebuild; added the mini needle overlay to the Artifact's rectangular
+        widget mockup. **Flag for whoever eventually builds the real native widget**:
+        the rectangular Android widget layout needs this needle+dot drawn onto its sage
+        tile too, not just the star pattern -- easy to miss again since it's a small
+        detail inside a busy reference image.
+      - **Third correction, same day**: user asked directly whether the *motif itself*
+        had drifted, prompting a closer zoom on the app-icon/widget screenshots. It had
+        -- the app icons and widget backgrounds in the screenshots are a checkerboard of
+        the actual filled {8/3} khatam star polygon (the exact shape given in the
+        handoff's own reference coordinates), not the "two outlined squares" stand-in
+        used in both the first and second artifact rebuilds. Rebuilt the Artifact's SVG
+        pattern defs to tile the real polygon (corner + center placement per tile so
+        adjacent copies interlock edge-to-edge, matching how these girih patterns are
+        actually constructed) across all 6 colorways. Also caught the same crude
+        two-square shape being used for the **qibla compass's center medallion** in the
+        real Flutter code (`qibla_compass.dart`) -- fixed there too, via a new
+        `_drawKhatamStar()` helper using the same polygon construction as
+        `star_watermark.dart`'s corner emblem, so all three motif usages (corner
+        watermark, qibla medallion, widget/icon tessellation) now agree.
+        `flutter analyze`/`custom_lint`/`flutter test` all green after this fix too.
+      - **Fourth correction, same day — stopped trusting eyeballed comparisons and
+        actually ran the real app.** User pushed back a third time: "I know you will
+        already drift from the artifact when applying to the real app (as you always
+        do)". Fair -- every fix up to this point was verified by re-reading source, not
+        by looking at the actual rendered app. Added Flutter **web** platform support
+        (`flutter create . --platforms=web`, new `web/` dir + `.claude/launch.json`) so
+        the real app could be run and screenshotted in a browser and compared directly
+        against `design/ScreenShots/*.png`, instead of maintaining a separate hand-built
+        HTML approximation that can silently drift from the Dart code. This is
+        verification-only -- the app still ships Android-only; web is not a target
+        platform.
+        - Guarded every mobile-only plugin call (`google_mobile_ads`, `home_widget`,
+          `flutter_local_notifications`/`flutter_timezone`) behind `kIsWeb` in
+          `ad_service.dart`, `banner_ad_widget.dart`, `widget_service.dart`,
+          `notification_service.dart`, and `main.dart` -- none of these have a web
+          implementation and were throwing `MissingPluginException` before `runApp()`
+          ever got a chance to render, leaving a blank white page.
+        - **Two real bugs found by actually looking at the rendered app** (not visible
+          from reading the code, and not things the earlier "eyeball the screenshot"
+          passes caught):
+          1. `star_watermark.dart`'s corner emblem was **340x340 at 10% opacity**,
+             rendering as an oversized, blurry, half-transparent disc that bled down
+             over multiple prayer rows instead of a compact corner accent. Shrunk to
+             220x220 at 7% opacity, pushed further into the corner.
+          2. **Caprasimo/Figtree have no Arabic glyphs** — Arabic text (the app's
+             default language) was silently falling back to the platform's plain
+             default font the entire time, meaning the "bold serif heading" look from
+             the design was never actually showing for Arabic users, only for any
+             stray Latin text. Fixed properly via `TextTheme.apply(fontFamilyFallback:
+             ...)` in `app_theme.dart` -- Rakkas for headings, Noto Sans Arabic for
+             body -- so Flutter automatically falls through per-glyph instead of
+             switching the whole font by locale.
+        - **Verified live in the browser** (Prayer Times screen, Arabic/RTL): date
+          header, all 6 prayer rows, the peach/terracotta-bordered next-prayer card
+          with the live countdown, the location pill, and the corner star watermark all
+          now render correctly and match the reference screenshot much more closely
+          than any prior artifact-only comparison could confirm.
+        - **Not verified this session**: Qibla and Settings screens, and English/LTR —
+          browser click automation against the Flutter web canvas consistently timed
+          out when switching bottom-nav tabs (a tooling limitation hit repeatedly, not
+          an app bug), so only the default first tab was confirmed live. Flag for next
+          session: re-attempt tab switching, or fall back to a real Android
+          emulator/device run instead of web.
+        - `flutter analyze` + `dart run custom_lint` + `flutter test` all green after
+          this round too (same handful of INFO-level "missing const decoration"
+          false positives as before, nothing new).
+- [x] **Design-mockup Artifact republished to match** — the "معاينة تطبيق مواقيت الصلاة
+      والقبلة" Artifact (same URL as before) was rebuilt from scratch on the Organic
+      tokens: interactive phone-frame mock with a live language (AR/RTL ⇄ EN/LTR) and
+      light/dark toggle, switchable Prayer Times / Qibla / Settings / notification-grid
+      screens, plus the 3 home-widget mockups and 3 app-icon color variants from the
+      handoff's README. The previous Artifact was still on the old teal/gold palette
+      from before this redesign — fully replaced, not merged.
+- [x] **Fixed a real infinite-spinner bug on the Qibla screen, found live by the user
+      manually clicking the tab themselves** (2026-08-07, after the browser-automation
+      click issue above blocked me from finding it via the same route). `QiblaScreen`'s
+      `StreamBuilder` on `FlutterCompass.events` only ever handled two cases: the stream
+      connected and sent a heading (show the compass), or connected and sent a null
+      heading (`compassUnavailable` message) — there was no handling at all for **the
+      stream never emitting anything in the first place**, which just leaves
+      `ConnectionState.waiting` forever with no way out. Confirmed root cause:
+      `flutter_compass`'s own `pubspec.yaml` only declares `android`/`ios` platform
+      implementations, nothing else — on the web verification build this session added,
+      `FlutterCompass.events` connects but never sends a single event. The same failure
+      mode is also possible on a **real Android device with no magnetometer**, not just
+      on web, so this was worth fixing properly rather than dismissing as web-only.
+      Fix: `qibla_screen.dart` now chains `.timeout(Duration(seconds: 4))` onto the
+      stream and treats `snapshot.hasError` (what a stream timeout produces) the same
+      as the existing null-heading case. Converted `QiblaScreen` to a `StatefulWidget`
+      to hold the stream instance stably across rebuilds (recreating a `.timeout()`
+      stream every `build()` would keep resubscribing and never actually time out), and
+      added a `debugCompassStreamOverride` constructor param purely so this is testable
+      without a real sensor. New regression test:
+      `test/qibla_screen_test.dart`, using a `StreamController` that's deliberately
+      never fed data — asserts the spinner shows immediately, then the
+      `compassUnavailable` message replaces it once the timeout fires.
+      `flutter analyze` + `dart run custom_lint` + `flutter test` all green (custom_lint
+      also flagged the new test's bare `MaterialApp()` with no theme —
+      `impeccable_material_baseline` — fixed by giving it one).
+      **Not yet re-verified live** on a real Android device (only via the new widget
+      test) — next session, confirm this doesn't regress the normal working-compass
+      path on-device, not just the timeout path.
+
 ### Easy
-- [ ] **Dark vs. light theme support.** Checked how much work this needs: almost none.
-      `star_watermark.dart`, `prayer_times_screen.dart`, and `home_shell.dart` all pull
-      colors from the theme's `ColorScheme` rather than hardcoding them, so today's
-      cream background / dark-teal text is simply what
-      `ColorScheme.fromSeed(seedColor: Colors.teal)` produces in light mode — passing
-      the same seed with `Brightness.dark` naturally inverts that relationship without
-      hand-picking replacement colors. Add `darkTheme: ThemeData(colorScheme:
-      ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
-      useMaterial3: true)` to `main.dart:46-49`, default `themeMode:
-      ThemeMode.system` (optional manual override persisted in `PrefsService`, like
-      the language/time-format toggles). One exception needing a manual check:
-      `qibla_compass.dart:36-37`'s brass gradient (`_brassLo`/`_brassHi`) is hardcoded
-      outside the theme and needs a contrast check against a dark background rather
-      than relying on automatic inversion. (Competitor-analysis finding, 2026-08-06.)
+- [x] ~~Dark vs. light theme support~~ — **superseded, done differently.** This item
+      predates the Organic redesign and referenced a `ColorScheme.fromSeed(seedColor:
+      Colors.teal)` that no longer exists. Delivered instead (2026-08-07) as part of the
+      4-mode appearance setting above: `AppTheme.light()`/`AppTheme.dark()` in
+      `lib/theme/app_theme.dart`, `main.dart`'s `darkTheme`, and `ThemeMode` driven by
+      `PrefsService.appearanceMode`. The brass-gradient contrast-check caveat mentioned
+      here no longer applies either — `qibla_compass.dart` was fully repainted (see
+      above) and its colors now come from `AppTheme` tokens, not a hardcoded brass
+      gradient.
 - [ ] **Hijri ⟷ Gregorian date-conversion tool.** A small dialog: pick a date from
       either calendar (radio toggle "From Gregorian" / "From Hijri"), shows the
       converted result in the other calendar, with a disclaimer that the conversion

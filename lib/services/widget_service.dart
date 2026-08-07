@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:home_widget/home_widget.dart';
 
 import '../l10n/app_strings.dart';
@@ -34,6 +35,9 @@ Future<void> updateNextPrayerWidget({
   required String language,
   required bool use24HourFormat,
 }) async {
+  // home_widget targets Android/iOS home screens -- no web implementation,
+  // and this app is Android-only in production; skip on web.
+  if (kIsWeb) return;
   final schedule = [
     for (final day in upcomingDays)
       for (final entry in day.ordered)

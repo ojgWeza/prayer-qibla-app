@@ -2,30 +2,32 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// A brass qibla-numa style compass face — a ring with engraved tick
-/// marks, cardinal letters, a faint eight-point-star medallion, and a
-/// two-tone needle — matching the design mockup instead of a bare
-/// Material arrow icon.
+import '../theme/app_theme.dart';
+
+/// The qibla gauge from the design handoff: a sage-to-terracotta gradient
+/// ring with tick marks and a fixed true-north marker, a cream dial face,
+/// and a wide chevron/arrowhead needle (instead of a plain pointer) that
+/// reads as directional even when static.
 class QiblaCompass extends StatelessWidget {
   final double angle;
+  final String language;
 
-  const QiblaCompass({super.key, required this.angle});
+  const QiblaCompass({super.key, required this.angle, this.language = 'ar'});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final labelStyle = (theme.textTheme.labelSmall ?? const TextStyle())
-        .copyWith(color: _CompassPainter._brassLo, fontWeight: FontWeight.bold);
+        .copyWith(color: AppTheme.accent900, fontWeight: FontWeight.bold);
     return SizedBox(
-      width: 220,
-      height: 220,
+      width: 240,
+      height: 240,
       child: CustomPaint(
         painter: _CompassPainter(
           angle: angle,
-          primary: theme.colorScheme.primary,
-          onSurface: theme.colorScheme.onSurface,
           surface: theme.colorScheme.surface,
           labelStyle: labelStyle,
+          useArabicLabels: language == 'ar',
         ),
       ),
     );
@@ -33,21 +35,16 @@ class QiblaCompass extends StatelessWidget {
 }
 
 class _CompassPainter extends CustomPainter {
-  static const _brassLo = Color(0xFF8A6317);
-  static const _brassHi = Color(0xFFF2DFA6);
-
   final double angle;
-  final Color primary;
-  final Color onSurface;
   final Color surface;
   final TextStyle labelStyle;
+  final bool useArabicLabels;
 
   const _CompassPainter({
     required this.angle,
-    required this.primary,
-    required this.onSurface,
     required this.surface,
     required this.labelStyle,
+    required this.useArabicLabels,
   });
 
   @override
@@ -55,88 +52,117 @@ class _CompassPainter extends CustomPainter {
     final center = size.center(Offset.zero);
     final outerRadius = size.shortestSide / 2;
 
+    // Sage <-> terracotta gradient ring.
     final ringRect = Rect.fromCircle(center: center, radius: outerRadius);
     canvas.drawCircle(
       center,
       outerRadius,
       Paint()
         ..shader = const SweepGradient(
-          colors: [_brassLo, _brassHi, _brassLo, _brassHi, _brassLo],
-          stops: [0, 0.2, 0.5, 0.8, 1.0],
+          colors: [
+            AppTheme.accent2,
+            AppTheme.accent2_100,
+            AppTheme.accent100,
+            AppTheme.accent,
+            AppTheme.accent2,
+          ],
+          stops: [0, 0.25, 0.5, 0.75, 1.0],
         ).createShader(ringRect),
+    );
+    canvas.drawCircle(
+      center,
+      outerRadius - 10,
+      Paint()..color = surface,
+    );
+
+    // Fixed true-north marker on the outer ring.
+    canvas.drawCircle(
+      center + Offset(0, -outerRadius + 5),
+      4,
+      Paint()..color = const Color(0xFFC1442E),
     );
 
     final tickPaint = Paint()
-      ..color = onSurface.withValues(alpha: 0.25)
-      ..strokeWidth = 1;
-    for (var i = 0; i < 72; i++) {
-      final a = (i / 72) * 2 * math.pi;
+      ..color = AppTheme.accent900.withValues(alpha: 0.35)
+      ..strokeWidth = 1.4;
+    for (var i = 0; i < 40; i++) {
+      final a = (i / 40) * 2 * math.pi;
       final direction = Offset(math.cos(a), math.sin(a));
       canvas.drawLine(
-        center + direction * (outerRadius * 0.86),
-        center + direction * outerRadius,
+        center + direction * (outerRadius - 16),
+        center + direction * (outerRadius - 22),
         tickPaint,
       );
     }
 
-    final faceRadius = outerRadius * 0.78;
+    final faceRadius = outerRadius - 30;
     canvas.drawCircle(center, faceRadius, Paint()..color = surface);
     canvas.drawCircle(
       center,
       faceRadius,
       Paint()
-        ..color = _brassLo
+        ..color = AppTheme.accent900
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
 
-    _drawLabel(canvas, 'ش', center + Offset(0, -faceRadius * 0.78));
-    _drawLabel(canvas, 'ج', center + Offset(0, faceRadius * 0.78));
-    _drawLabel(canvas, 'ق', center + Offset(faceRadius * 0.78, 0));
-    _drawLabel(canvas, 'غ', center + Offset(-faceRadius * 0.78, 0));
+    final north = useArabicLabels ? 'ش' : 'N';
+    final south = useArabicLabels ? 'ج' : 'S';
+    final east = useArabicLabels ? 'ق' : 'E';
+    final west = useArabicLabels ? 'غ' : 'W';
+    _drawLabel(canvas, north, center + Offset(0, -faceRadius * 0.82));
+    _drawLabel(canvas, south, center + Offset(0, faceRadius * 0.82));
+    _drawLabel(canvas, east, center + Offset(faceRadius * 0.82, 0));
+    _drawLabel(canvas, west, center + Offset(-faceRadius * 0.82, 0));
 
-    _drawStar8(canvas, center, faceRadius * 0.36, onSurface.withValues(alpha: 0.25));
+    // Faint eight-point khatam-star medallion at the center -- the same
+    // {8/3} star polygon as the app's corner watermark, not a plain rotated
+    // square.
+    _drawKhatamStar(
+      canvas,
+      center,
+      faceRadius * 0.22,
+      AppTheme.accent900.withValues(alpha: 0.18),
+    );
 
+    // Wide chevron/arrowhead needle -- reads as directional even static.
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
 
-    final needleLength = faceRadius * 1.35;
-    final needleWidth = faceRadius * 0.12;
-    final needleRect = Rect.fromCenter(
-      center: Offset(0, -needleLength * 0.15),
-      width: needleWidth,
-      height: needleLength,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(needleRect, Radius.circular(needleWidth / 3)),
+    final needleLen = faceRadius * 0.92;
+    final needleHalfWidth = faceRadius * 0.24;
+    final needlePath = Path()
+      ..moveTo(-needleLen, 0)
+      ..lineTo(needleLen * 0.15, -needleHalfWidth)
+      ..lineTo(needleLen, 0)
+      ..lineTo(needleLen * 0.15, needleHalfWidth)
+      ..close();
+    canvas.drawPath(
+      needlePath,
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [primary, primary, onSurface, onSurface],
-          stops: const [0, 0.46, 0.54, 1],
-        ).createShader(needleRect),
+          colors: [
+            AppTheme.accent900,
+            AppTheme.accent,
+            AppTheme.accent100,
+          ],
+        ).createShader(
+          Rect.fromLTWH(-needleLen, -needleHalfWidth, needleLen * 2, needleHalfWidth * 2),
+        ),
     );
-
-    final tipY = needleRect.top;
-    final tipPath = Path()
-      ..moveTo(-needleWidth * 0.9, tipY)
-      ..lineTo(needleWidth * 0.9, tipY)
-      ..lineTo(0, tipY - needleWidth * 1.6)
-      ..close();
-    canvas.drawPath(tipPath, Paint()..color = primary);
     canvas.restore();
 
-    canvas.drawCircle(center, faceRadius * 0.06, Paint()..color = primary);
+    canvas.drawCircle(center, faceRadius * 0.14, Paint()..color = surface);
     canvas.drawCircle(
       center,
-      faceRadius * 0.06,
+      faceRadius * 0.14,
       Paint()
-        ..color = surface
+        ..color = AppTheme.accent900
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+        ..strokeWidth = 2.4,
     );
+    canvas.drawCircle(center, faceRadius * 0.05, Paint()..color = AppTheme.accent);
   }
 
   void _drawLabel(Canvas canvas, String text, Offset pos) {
@@ -147,26 +173,30 @@ class _CompassPainter extends CustomPainter {
     painter.paint(canvas, pos - Offset(painter.width / 2, painter.height / 2));
   }
 
-  void _drawStar8(Canvas canvas, Offset center, double half, Color color) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    final rect = Rect.fromCenter(center: center, width: half * 2, height: half * 2);
-    canvas.drawRect(rect, paint);
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(math.pi / 4);
-    canvas.translate(-center.dx, -center.dy);
-    canvas.drawRect(rect, paint);
-    canvas.restore();
+  /// The exact {8/3} khatam-star polygon from the design handoff (reference
+  /// coordinates "90,0 -63.6,63.6 0,-90 ..." scaled to [radius]), drawn with
+  /// the even-odd fill rule so the points read as a proper interlocking
+  /// star rather than a plain rotated square.
+  void _drawKhatamStar(Canvas canvas, Offset center, double radius, Color color) {
+    final s = radius / 90;
+    final path = Path()
+      ..moveTo(center.dx + 90 * s, center.dy)
+      ..lineTo(center.dx - 63.6 * s, center.dy + 63.6 * s)
+      ..lineTo(center.dx, center.dy - 90 * s)
+      ..lineTo(center.dx + 63.6 * s, center.dy + 63.6 * s)
+      ..lineTo(center.dx - 90 * s, center.dy)
+      ..lineTo(center.dx + 63.6 * s, center.dy - 63.6 * s)
+      ..lineTo(center.dx, center.dy + 90 * s)
+      ..lineTo(center.dx - 63.6 * s, center.dy - 63.6 * s)
+      ..close();
+    path.fillType = PathFillType.evenOdd;
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   @override
   bool shouldRepaint(covariant _CompassPainter oldDelegate) =>
       oldDelegate.angle != angle ||
-      oldDelegate.primary != primary ||
-      oldDelegate.onSurface != onSurface ||
       oldDelegate.surface != surface ||
-      oldDelegate.labelStyle != labelStyle;
+      oldDelegate.labelStyle != labelStyle ||
+      oldDelegate.useArabicLabels != useArabicLabels;
 }
