@@ -107,7 +107,15 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   child: Text(AppStrings.of(context, 'compassUnavailable')),
                 );
               }
-              final angle = ((qiblaBearing - heading) * pi / 180) * -1;
+              // QiblaCompass's needle is built pointing straight up (toward
+              // the tip) at angle == 0, and canvas.rotate() turns clockwise
+              // for positive radians -- the same convention compass
+              // bearings/headings use (clockwise from north). So rotating
+              // by the raw bearing-minus-heading delta (no sign flip) is
+              // what actually points the tip at Qibla: when the device's
+              // heading matches the qibla bearing, delta is 0 and the
+              // needle points straight up the screen.
+              final angle = (qiblaBearing - heading) * pi / 180;
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

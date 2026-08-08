@@ -6,8 +6,9 @@ import '../theme/app_theme.dart';
 
 /// The qibla gauge from the design handoff: a sage-to-terracotta gradient
 /// ring with tick marks and a fixed true-north marker, a cream dial face,
-/// and a wide chevron/arrowhead needle (instead of a plain pointer) that
-/// reads as directional even when static.
+/// and an asymmetric tapered-blade needle (sharp tip = Qibla, blunt rounded
+/// tail, trailing chevrons) so which end points at Qibla is unambiguous
+/// even when the needle isn't moving.
 class QiblaCompass extends StatelessWidget {
   final double angle;
   final String language;
@@ -51,6 +52,7 @@ class _CompassPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final outerRadius = size.shortestSide / 2;
+    final isDark = ThemeData.estimateBrightnessForColor(surface) == Brightness.dark;
 
     // Sage <-> terracotta gradient ring.
     final ringRect = Rect.fromCircle(center: center, radius: outerRadius);
@@ -125,31 +127,56 @@ class _CompassPainter extends CustomPainter {
       AppTheme.accent900.withValues(alpha: 0.18),
     );
 
-    // Wide chevron/arrowhead needle -- reads as directional even static.
+    // Qibla needle -- an asymmetric tapered blade (sharp tip = Qibla, blunt
+    // rounded tail) with trailing chevron motion marks, NOT a generic
+    // symmetric double-pointed arrow: a symmetric shape has two identical
+    // tips and gives the user no way to tell which end is Qibla. Path data
+    // is the design handoff's exact needle
+    // ("M0,-80 L11,-28 Q12,38 0,54 Q-12,38 -11,-28 Z" + 3 chevrons at a 240x240
+    // compass, faceRadius ~92) scaled to this dial's faceRadius. Points up
+    // (toward the tip) at angle == 0.
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
 
-    final needleLen = faceRadius * 0.92;
-    final needleHalfWidth = faceRadius * 0.24;
-    final needlePath = Path()
-      ..moveTo(-needleLen, 0)
-      ..lineTo(needleLen * 0.15, -needleHalfWidth)
-      ..lineTo(needleLen, 0)
-      ..lineTo(needleLen * 0.15, needleHalfWidth)
+    final s = faceRadius / 92;
+    final chevronPaint = Paint()
+      ..color = AppTheme.accent700
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4 * s
+      ..strokeCap = StrokeCap.round;
+    for (final (yTop, yBottom, opacity) in [
+      (8.0, 18.0, 0.55),
+      (20.0, 30.0, 0.35),
+      (32.0, 42.0, 0.18),
+    ]) {
+      final chevron = Path()
+        ..moveTo(-9 * s, yBottom * s)
+        ..lineTo(0, yTop * s)
+        ..lineTo(9 * s, yBottom * s);
+      canvas.drawPath(chevron, chevronPaint..color = AppTheme.accent700.withValues(alpha: opacity));
+    }
+
+    final bladePath = Path()
+      ..moveTo(0, -80 * s)
+      ..lineTo(11 * s, -28 * s)
+      ..quadraticBezierTo(12 * s, 38 * s, 0, 54 * s)
+      ..quadraticBezierTo(-12 * s, 38 * s, -11 * s, -28 * s)
       ..close();
+    // Dark at the tail fading to a light highlight at the tip in light
+    // theme; reversed in dark theme -- never a flat single fill, and never
+    // just inherited so it stays legible on the sage widget/dark surfaces.
+    final tailColor = isDark ? AppTheme.accent2_100 : AppTheme.accent900;
+    final tipColor = isDark ? AppTheme.accent900 : AppTheme.accent2_100;
     canvas.drawPath(
-      needlePath,
+      bladePath,
       Paint()
         ..shader = LinearGradient(
-          colors: [
-            AppTheme.accent900,
-            AppTheme.accent,
-            AppTheme.accent100,
-          ],
-        ).createShader(
-          Rect.fromLTWH(-needleLen, -needleHalfWidth, needleLen * 2, needleHalfWidth * 2),
-        ),
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [tailColor, AppTheme.accent, tipColor],
+          stops: const [0, 0.55, 1],
+        ).createShader(Rect.fromLTWH(-12 * s, -80 * s, 24 * s, 134 * s)),
     );
     canvas.restore();
 

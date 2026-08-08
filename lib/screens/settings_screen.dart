@@ -52,6 +52,7 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           title: Text(AppStrings.of(context, 'timeFormat')),
           trailing: SegmentedButton<bool>(
+            showSelectedIcon: false,
             segments: [
               ButtonSegment(
                 value: true,
@@ -138,6 +139,7 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           title: Text(AppStrings.of(context, 'language')),
           trailing: SegmentedButton<String>(
+            showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: 'ar', label: Text('العربية')),
               ButtonSegment(value: 'en', label: Text('English')),
