@@ -407,10 +407,11 @@ class _HomeShellState extends State<HomeShell> {
               bottom: 6,
               start: -2,
               width: 96,
-              child: DecoratedBox(
+              child: const DecoratedBox(
                 decoration: BoxDecoration(
-                  color: AppTheme.accent300.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(4),
+                  // AppTheme.accent300 (0xFFDDA875) at 40% alpha.
+                  color: Color(0x66DDA875),
+                  borderRadius: BorderRadius.all(Radius.circular(4)),
                 ),
               ),
             ),
@@ -435,14 +436,14 @@ class _HomeShellState extends State<HomeShell> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: InkWell(
               onTap: _openLocationPicker,
-              borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+              borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusPill)),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   border: Border.all(color: theme.colorScheme.outline),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+                  borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusPill)),
                 ),
                 child: Row(
                   children: [

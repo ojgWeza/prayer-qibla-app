@@ -196,7 +196,7 @@ class _PrayerRow extends StatelessWidget {
       color: highlighted ? AppTheme.accent100 : null,
       shape: highlighted
           ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
               side: const BorderSide(color: AppTheme.accent300),
             )
           : null,

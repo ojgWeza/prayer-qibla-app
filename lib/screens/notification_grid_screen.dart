@@ -134,7 +134,7 @@ class _GridCell extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: const BorderRadius.all(Radius.circular(8)),
       child: Semantics(
         label: semanticLabel,
         toggled: enabled,
@@ -142,14 +142,14 @@ class _GridCell extends StatelessWidget {
         child: Container(
           width: 36,
           height: 36,
-          margin: const EdgeInsets.all(6),
+          margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color:
                 enabled ? colorScheme.primary.withValues(alpha: 0.15) : null,
             border: Border.all(
               color: enabled ? colorScheme.primary : colorScheme.outline,
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: const BorderRadius.all(Radius.circular(8)),
           ),
           child: enabled
               ? Icon(Icons.check, size: 18, color: colorScheme.primary)
