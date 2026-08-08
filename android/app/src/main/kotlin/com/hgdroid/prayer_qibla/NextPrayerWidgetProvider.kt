@@ -40,6 +40,15 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
         // widget's countdown text matches the app's wording/language.
         val hoursMinutesTemplate = widgetData.getString("remaining_hours_minutes_template", null)
         val minutesTemplate = widgetData.getString("remaining_minutes_template", null)
+        val hijriText = widgetData.getString("hijri_date", "")
+        // Bearing of Qibla from true north, in degrees -- the needle is
+        // drawn pointing up (north) at rest, so rotating the ImageView by
+        // this angle points it at Qibla. Not device-heading-relative: a
+        // home screen widget has no live compass sensor stream, so this is
+        // a static north-up bearing indicator, matching the "as a live
+        // background" panel treatment in DESIGN_RULES.md rather than a
+        // real-time rotating needle.
+        val qiblaBearing = widgetData.getString("qibla_bearing_degrees", null)?.toFloatOrNull() ?: 0f
 
         var prayerLabel = context.getString(R.string.widget_default_prayer)
         var prayerTime = context.getString(R.string.widget_default_time)
@@ -74,12 +83,11 @@ class NextPrayerWidgetProvider : HomeWidgetProvider() {
                 if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR,
             )
             views.setTextViewText(R.id.widget_header, header)
-            views.setTextViewText(R.id.widget_prayer_name, prayerLabel)
-            views.setTextViewText(R.id.widget_prayer_time, prayerTime)
+            views.setTextViewText(R.id.widget_prayer_name, "$prayerLabel · $prayerTime")
             views.setTextViewText(R.id.widget_countdown, countdownText)
-            views.setOnClickPendingIntent(R.id.widget_header, pendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_prayer_name, pendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_prayer_time, pendingIntent)
+            views.setTextViewText(R.id.widget_hijri, hijriText)
+            views.setFloat(R.id.widget_compass_needle, "setRotation", qiblaBearing)
+            views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

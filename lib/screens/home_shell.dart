@@ -189,6 +189,7 @@ class _HomeShellState extends State<HomeShell> {
       upcomingDays: upcomingDays,
       language: _language,
       use24HourFormat: _use24HourFormat,
+      qiblaBearing: bearing,
     );
   }
 

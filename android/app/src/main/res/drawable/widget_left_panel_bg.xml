@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Motif/compass panel fill: color-accent-2-700 (sage), see
+     DESIGN_RULES.md line 334. Rounded on all 4 corners at the same
+     radius-lg as the outer card so it never pokes a square corner past
+     the card's rounded outline in either LTR or RTL layout direction. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#5E6B47" />
+    <corners android:radius="24dp" />
+</shape>

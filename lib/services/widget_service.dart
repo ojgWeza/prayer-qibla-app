@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:home_widget/home_widget.dart';
 
 import '../l10n/app_strings.dart';
+import 'date_service.dart';
 import 'prayer_times_service.dart';
 
 const _androidWidgetName = 'NextPrayerWidgetProvider';
@@ -34,6 +35,7 @@ Future<void> updateNextPrayerWidget({
   required List<DailyPrayerTimes> upcomingDays,
   required String language,
   required bool use24HourFormat,
+  required double qiblaBearing,
 }) async {
   // home_widget targets Android/iOS home screens -- no web implementation,
   // and this app is Android-only in production; skip on web.
@@ -50,13 +52,24 @@ Future<void> updateNextPrayerWidget({
   ];
 
   await HomeWidget.saveWidgetData<String>('language', language);
+  // Rectangular widget's text-panel header, per DESIGN_RULES.md: the
+  // "Prayers" tab label, not "Next prayer" wording -- see
+  // Prayer & Qibla App.dc.html:346.
   await HomeWidget.saveWidgetData<String>(
     'next_prayer_header',
-    AppStrings.forLanguage(language, 'nextPrayer'),
+    AppStrings.forLanguage(language, 'tabPrayerTimes'),
   );
   await HomeWidget.saveWidgetData<String>(
     'prayer_schedule_json',
     jsonEncode(schedule),
+  );
+  await HomeWidget.saveWidgetData<String>(
+    'hijri_date',
+    formatHijri(DateTime.now(), language),
+  );
+  await HomeWidget.saveWidgetData<String>(
+    'qibla_bearing_degrees',
+    qiblaBearing.toString(),
   );
   // The native provider computes the countdown text itself (it has to --
   // the schedule is only pushed when times are recomputed, not every

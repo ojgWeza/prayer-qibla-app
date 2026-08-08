@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rotating part of the Qibla compass: tapered blade + one trailing
+     chevron motion mark. Exact path data from DESIGN_RULES.md / the
+     rectangular-widget mockup, NOT a generic arrow. Rotated at runtime via
+     View.setRotation() from NextPrayerWidgetProvider using the qibla
+     bearing — host ImageView must be the same size/position as
+     widget_compass_ring so the rotation pivot (view center) lines up. On
+     this dark sage panel the needle uses the explicit light color #FFF6E0
+     per DESIGN_RULES.md, never an inherited/matching-backdrop color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="140dp"
+    android:height="140dp"
+    android:viewportWidth="220"
+    android:viewportHeight="220">
+    <path
+        android:pathData="M104,124 L110,116 L116,124"
+        android:strokeColor="#FFF6E0"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.8"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M110,52 L118,90 Q119,136 110,146 Q101,136 102,90 Z"
+        android:fillColor="#FFF6E0" />
+</vector>

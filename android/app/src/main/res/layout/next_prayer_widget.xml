@@ -1,99 +1,107 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mirrors the mockup's .widget-card exactly (see prayer_qibla_mockup
-     Artifact, "home-mock" section): a light card with a gold accent
-     stripe on the leading edge, a small gold seal icon, a label + prayer
-     name column, and a time + countdown column at the trailing edge. -->
+<!-- Rectangular home-screen widget, locked to the 300x130dp size and
+     96dp-motif-panel + text-panel split from DESIGN_RULES.md — diffed
+     directly against Prayer & Qibla App.dc.html lines 333-351. Do not
+     resize or add padding around a single box; the two-panel split is the
+     whole point. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_width="300dp"
+    android:layout_height="130dp"
     android:background="@drawable/widget_background">
 
-    <!-- Accent stripe, matching .widget-card::before -->
-    <TextView
-        android:layout_width="6dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="start"
-        android:background="#B8892B"
-        android:text="" />
-
-    <!-- Sizes are scaled well past the mockup's phone-preview card on
-         purpose: launcher hosts grant widget space in whole grid cells, so
-         this box can't be shrunk below roughly one row no matter how small
-         minHeight is declared. Content has to fill that row properly
-         instead, rather than leaving two small lines floating in mostly
-         empty space (this is what the user flagged live, 2026-08-06). -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="22dp"
-        android:paddingEnd="18dp"
-        android:paddingTop="22dp"
-        android:paddingBottom="22dp">
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
 
-        <ImageView
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_marginEnd="16dp"
-            android:contentDescription="@null"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_launcher_foreground" />
+        <!-- Motif/compass panel: fixed 96dp, never resizes with the card. -->
+        <FrameLayout
+            android:layout_width="96dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_left_panel_bg">
 
+            <ImageView
+                android:layout_width="140dp"
+                android:layout_height="140dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_compass_ring" />
+
+            <ImageView
+                android:id="@+id/widget_compass_needle"
+                android:layout_width="140dp"
+                android:layout_height="140dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_compass_needle" />
+
+            <ImageView
+                android:layout_width="110dp"
+                android:layout_height="110dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_star_motif" />
+        </FrameLayout>
+
+        <!-- Text panel: next prayer name+time, minutes remaining, Hijri
+             date — never the city/location (DESIGN_RULES.md line 48). -->
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
 
             <TextView
                 android:id="@+id/widget_header"
+                android:fontFamily="@font/figtree_regular"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:letterSpacing="0.04"
                 android:text="@string/widget_default_header"
-                android:textColor="#5C6864"
-                android:textSize="14sp" />
+                android:textAllCaps="true"
+                android:textColor="#A85A2A"
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_prayer_name"
+                android:fontFamily="@font/caprasimo_regular"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/widget_default_prayer"
-                android:textColor="#1C2622"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:gravity="end"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_prayer_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/widget_default_time"
-                android:textColor="#0A5951"
-                android:textSize="28sp"
-                android:textStyle="bold" />
+                android:textColor="#201E1D"
+                android:textSize="21sp" />
 
             <TextView
                 android:id="@+id/widget_countdown"
+                android:fontFamily="@font/figtree_regular"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#5C6864"
-                android:textSize="13sp" />
+                android:textColor="#7A4019"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_hijri"
+                android:alpha="0.7"
+                android:fontFamily="@font/figtree_regular"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#201E1D"
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
