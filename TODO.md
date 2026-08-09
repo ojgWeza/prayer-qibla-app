@@ -675,7 +675,18 @@ Not started yet).
 - [ ] Replace AdMob test IDs with real ones (`AndroidManifest.xml` and `ad_service.dart`)
 - [ ] Create a real release **keystore/signing key** (currently signed with the debug
       key, which is not publishable)
-- [ ] Decide on a final app name (still just "prayer_qibla" / `com.hgdroid.prayer_qibla`)
+- [x] **App display name decided (2026-08-09): "Salaty."** User pointed out the
+      launcher was showing the literal Flutter project placeholder name
+      (`android:label="prayer_qibla"`) as the icon caption, which is ugly/technical.
+      Changed `AndroidManifest.xml`'s `android:label` to `"Salaty"`, plus the
+      web-preview-only `web/index.html`/`web/manifest.json` title/name for
+      consistency. **`applicationId` stays `com.hgdroid.prayer_qibla`** — unrelated
+      and already locked (can't change post-upload, see the decision entry below).
+      The in-app `AppBar` still shows the existing localized tagline
+      (`appName` in `app_strings.dart`: "مواقيت الصلاة والقبلة" / "Prayer Times &
+      Qibla") — not touched, since that's separate branded copy, not the
+      ugly-placeholder issue that was reported. Revisit if "Salaty" should replace
+      that too.
 - [ ] Write a Privacy Policy (required by Google for any app using AdMob + location)
 - [ ] Real screenshots + Play Store listing copy
 - [ ] AdMob real IDs, release keystore, and R8 re-enablement are all still **open** —

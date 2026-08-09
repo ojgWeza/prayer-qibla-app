@@ -1,6 +1,6 @@
 {
-    "name": "prayer_qibla",
-    "short_name": "prayer_qibla",
+    "name": "Salaty",
+    "short_name": "Salaty",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
