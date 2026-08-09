@@ -21,8 +21,17 @@ Audience: Egypt/Arab world first, global (Arabic/English) second.
    free Nominatim (OpenStreetMap) API — once per search, not a recurring dependency.
 2. **No local Android SDK on the dev machine.** Builds happen entirely on
    **GitHub Actions** (`.github/workflows/build.yml`) — a deliberate choice to avoid
-   multi-GB local installs. Only the Flutter SDK is local (`D:\dev\flutter`), for
-   `flutter analyze` / `flutter test` / editing.
+   multi-GB local installs. Only the Flutter SDK is local, at `D:\dev\flutter\bin`
+   (also `D:\dev\platform-tools\adb.exe`) — **neither is on PATH**, but both exist and
+   work when invoked by full path (`"D:\dev\flutter\bin\flutter.bat" analyze`, etc.).
+   **Don't report "flutter isn't available"/"can't verify the build" from a bare
+   `flutter` PATH lookup failing** — check `grep -i flutter CONSTITUTION.md` or just
+   try the full path first; a real APK can still be produced by pushing + dispatching
+   the CI workflow (`gh workflow run build.yml --ref <branch>`,
+   `gh run watch <id> --exit-status`) and pulling the artifact down
+   (`gh run download <id> -n app-debug`) to install via `adb install` for live,
+   on-device verification — this whole loop is available locally, it just isn't a
+   single `flutter build apk` command.
 3. **Every change must pass, before it's pushed:**
    - `flutter analyze` (must say "No issues found")
    - `dart run custom_lint` (the `impeccable_flutter_lints` check for "AI-slop" UI
@@ -239,6 +248,30 @@ session doesn't pay the same cost.
   resource XML comments, grep for `--` inside `<!-- -->` bodies specifically (a plain
   `--` search flags the legitimate `<!--`/`-->` delimiters too, so check what's
   *between* them) rather than relying on CI to catch it.
+- **`google_fonts` (the Flutter package) does not help a native `RemoteViews` widget
+  at all** — it downloads/caches fonts at Flutter-engine runtime, which a widget
+  inflated by the launcher process never goes through. To get Caprasimo/Figtree text
+  in `next_prayer_widget.xml`, the actual open-source (OFL) `.ttf` files were fetched
+  directly from `google/fonts` on GitHub and committed under
+  `android/app/src/main/res/font/`, referenced via plain `android:fontFamily="@font/..."`.
+  Only fetched the variable-weight regular instances (no separate static bold/semibold
+  files exist for Figtree upstream) — bold-looking text uses `android:textStyle="bold"`
+  for Android's synthetic bold instead, which is fine since it's still the same
+  typeface family, not a substitution.
+- **A `RemoteViews.setFloat(id, "setRotation", degrees)` call rotates an `ImageView`
+  around its own view center** — used this to rotate just the Qibla-needle drawable at
+  runtime (pushed from `qibla_bearing_degrees` in `widget_service.dart`) while a
+  separate, non-rotating `ImageView` underneath renders the fixed ring + red north dot.
+  Needs the rotating and fixed `ImageView`s to be the exact same size and positioned
+  identically (e.g. both `layout_gravity="center"` in the same `FrameLayout`) so the
+  rotation pivot lines up with the fixed layer's center.
+- **This widget's Qibla needle is intentionally static** (points at the Qibla bearing
+  relative to true north, not relative to live device heading) — a home-screen widget
+  has no continuous compass-sensor feed the way the in-app Qibla screen does (that
+  would need a foreground service polling the magnetometer, which isn't worth the
+  battery cost for a home-screen widget). The user's first reaction on seeing this live
+  was that it "shouldn't be" static — flagged in TODO.md as a still-open discussion,
+  not silently assumed settled.
 
 ### Local device testing (no Android Studio on this machine)
 - `adb` was installed standalone — just the `platform-tools` zip from

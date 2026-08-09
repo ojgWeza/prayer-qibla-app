@@ -170,26 +170,55 @@ is done — move it into "Done" rather than leaving it ambiguous.
 
 ## In progress / needs attention right now 🔄
 
-**Start here next session** (2026-08-07 session end — Organic redesign applied, gaps
-found and fixed by actually running the app, not just re-reading code):
-1. Re-run `flutter analyze` / `dart run custom_lint` / `flutter test` first, before
-   trusting anything below — confirm nothing regressed between sessions.
-2. Live-verify on a real Android device (not just the `flutter-web` verification rig):
-   Qibla screen (both the redesigned compass gauge AND the new timeout-based
-   `compassUnavailable` fallback don't false-trigger on a device that *does* have a
-   working compass), Settings screen (week-start dropdown, appearance radio group,
-   notification master toggle + "Customize by day" grid), and English/LTR — none of
-   these were confirmed live this session; only the Arabic/RTL Prayer Times screen was
-   (see the design-handoff section below for why).
-3. Decide whether to keep the `web/` directory + `.claude/launch.json` around as a
-   standing local verification tool (recommended — it caught 3 real bugs this session
-   that source-reading alone missed) or remove it if it turns out to be more friction
-   than it's worth long-term.
-4. This branch (`feature/home-screen-widget`) now carries two fairly different bodies
-   of work — the original Android home-widget feature, and this session's much larger
-   Organic design-system application — mixed together uncommitted. Consider with the
-   user whether to split before merging, per the "one branch per feature" rule in
-   `CONSTITUTION.md` § 2.4, rather than assuming either way.
+**Start here next session** (2026-08-08 session end — see CONSTITUTION.md's session log
+for the full account; short version below):
+
+1. **⚠️ NOT YET USER-CONFIRMED — highest priority.** The Qibla compass needle
+   direction/rotation fix (commit `901c109`) is only reasoned-through from the rotation
+   math, not physically verified. The user was asked to point the phone at a known
+   Qibla reference (or compare against another compass app) and confirm the sharp tip
+   now lands on the correct heading, but had not replied by session end. **Do not
+   assume this is fixed** until that confirmation lands — if the direction is still
+   wrong, re-derive `qibla_screen.dart`'s `angle = (qiblaBearing - heading) * pi / 180`
+   formula against `QiblaCompass`'s needle-points-up-at-rest convention in
+   `qibla_compass.dart`, and consider that `flutter_compass`'s heading sign/reference
+   convention itself may differ by device/platform.
+2. [x] Rectangular home-screen widget rebuilt to match `DESIGN_RULES.md` literally
+   (exact star motif, exact two-part needle, real Organic color tokens, bundled
+   Caprasimo/Figtree fonts, Hijri date, dropped location) — CI-build-verified (real
+   Gradle/AAPT compile passed) AND live-verified on a physical device (Mi 10, over
+   wireless adb). See commit `95cc9a3`.
+3. [x] Qibla compass needle rebuilt from a generic symmetric double-pointed diamond to
+   the design's exact asymmetric tapered blade (sharp tip / blunt rounded tail) +
+   trailing chevrons — live-verified the shape/gradient render correctly on-device;
+   only the absolute rotation direction (item 1 above) still needs confirmation.
+4. [x] Removed the Material `SegmentedButton` checkmark (`showSelectedIcon: false`)
+   from both the time-format and language pills in Settings — was forcing a two-line
+   wrap with Arabic labels. Live-verified fixed on-device.
+5. [x] Fixed 7 pre-existing `custom_lint` const-decoration/cramped-padding issues
+   (unrelated to this session's other work, but were blocking CI from ever reaching
+   the APK build step) — see commit `b0f7aa3`.
+6. **Open bug, not yet fixed**: dark-mode "next prayer" card has no contrast — the
+   prayer name is unreadable. User-reported 2026-08-08, live on-device. Likely
+   `AppTheme.accent900`-on-`accent100`-style pairing in `prayer_times_screen.dart`'s
+   `_PrayerRow`/highlighted-card styling that was tuned for light mode only — check
+   `theme.textTheme`/`AppTheme.accent700` usage there against the actual dark
+   `ColorScheme` values in `app_theme.dart`, not just the light ramp.
+7. **Open idea, not yet implemented**: user suggested showing a Kaaba icon just
+   outside the compass ring, in the direction it's pointing, as an extra disambiguation
+   cue beyond the asymmetric needle shape. Deferred — ask whether it's still wanted now
+   that the needle shape itself disambiguates tip vs. tail.
+8. **Open idea, not yet implemented**: the rectangular widget's Qibla needle is a
+   static north-relative bearing indicator, not a live device-heading-relative one —
+   this is intentional (a home-screen widget has no continuous compass sensor feed
+   without a battery-draining foreground service), not a bug, but the user's initial
+   reaction was that it "shouldn't be" static. Revisit if they still want something
+   different here after reading the explanation.
+9. This branch (`feature/home-screen-widget`) still carries multiple different bodies
+   of work — the original Android home-widget feature, last session's Organic
+   design-system application, and this session's widget rebuild + compass fixes — all
+   uncommitted-to-master. Consider with the user whether to split before merging, per
+   the "one branch per feature" rule in `CONSTITUTION.md` § 2.4.
 
 ---
 
