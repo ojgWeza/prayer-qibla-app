@@ -173,16 +173,21 @@ is done — move it into "Done" rather than leaving it ambiguous.
 **Start here next session** (2026-08-08 session end — see CONSTITUTION.md's session log
 for the full account; short version below):
 
-1. **⚠️ NOT YET USER-CONFIRMED — highest priority.** The Qibla compass needle
-   direction/rotation fix (commit `901c109`) is only reasoned-through from the rotation
-   math, not physically verified. The user was asked to point the phone at a known
-   Qibla reference (or compare against another compass app) and confirm the sharp tip
-   now lands on the correct heading, but had not replied by session end. **Do not
-   assume this is fixed** until that confirmation lands — if the direction is still
-   wrong, re-derive `qibla_screen.dart`'s `angle = (qiblaBearing - heading) * pi / 180`
-   formula against `QiblaCompass`'s needle-points-up-at-rest convention in
-   `qibla_compass.dart`, and consider that `flutter_compass`'s heading sign/reference
-   convention itself may differ by device/platform.
+1. **⚠️ STILL NOT USER-CONFIRMED — highest priority.** Live-tested on-device
+   (2026-08-09): commit `901c109`'s `angle = (qiblaBearing - heading) * pi / 180`
+   formula did change which way the needle points (confirming the needle-shape fix
+   itself works — tip vs. tail is unambiguous), but the user reported it's still
+   pointing the *wrong* direction. Rotation math (canvas.rotate is clockwise-positive,
+   relative-bearing = target - heading is the standard nav formula) says the old
+   formula should have been right, so rather than re-derive the same math again, this
+   session **flipped the sign**: `angle = (heading - qiblaBearing) * pi / 180`. This is
+   an empirical guess, not a re-derivation — the discrepancy is most likely
+   `flutter_compass`'s heading sign/reference convention differing from the assumed
+   standard on this device/platform, which can't be confirmed by reading code. **Not
+   yet live-verified** — next session, build + install + physically test against a
+   known Qibla reference before touching this again. If the sign flip is *still*
+   wrong, the bug is elsewhere (e.g. the needle's rest-angle assumption in
+   `qibla_compass.dart`, or `computeQiblaBearing`), not the sign.
 2. [x] Rectangular home-screen widget rebuilt to match `DESIGN_RULES.md` literally
    (exact star motif, exact two-part needle, real Organic color tokens, bundled
    Caprasimo/Figtree fonts, Hijri date, dropped location) — CI-build-verified (real
@@ -198,12 +203,17 @@ for the full account; short version below):
 5. [x] Fixed 7 pre-existing `custom_lint` const-decoration/cramped-padding issues
    (unrelated to this session's other work, but were blocking CI from ever reaching
    the APK build step) — see commit `b0f7aa3`.
-6. **Open bug, not yet fixed**: dark-mode "next prayer" card has no contrast — the
-   prayer name is unreadable. User-reported 2026-08-08, live on-device. Likely
-   `AppTheme.accent900`-on-`accent100`-style pairing in `prayer_times_screen.dart`'s
-   `_PrayerRow`/highlighted-card styling that was tuned for light mode only — check
-   `theme.textTheme`/`AppTheme.accent700` usage there against the actual dark
-   `ColorScheme` values in `app_theme.dart`, not just the light ramp.
+6. [x] **Dark-mode "next prayer" card contrast bug — fixed (2026-08-09).** Root cause
+   was the opposite of the earlier guess: `_PrayerRow`'s highlighted `Card` always used
+   the light-ramp `AppTheme.accent100` background regardless of theme, while its title
+   text already correctly used the theme-aware `text` color (which resolves to the
+   near-white `_textDark` in dark mode) — light text on a light background, near-zero
+   contrast. Fixed in `prayer_times_screen.dart` by branching the card background/
+   border/subtitle color on `theme.brightness` (dark → `accent900`/`accent700`/
+   `accent100`, light → the original `accent100`/`accent300`/`accent700`), same
+   light/dark pairing pattern already used in `qibla_compass.dart`'s needle gradient.
+   `flutter analyze` + `custom_lint` + `flutter test` all green. **Not yet
+   live-verified on-device.**
 7. **Open idea, not yet implemented**: user suggested showing a Kaaba icon just
    outside the compass ring, in the direction it's pointing, as an extra disambiguation
    cue beyond the asymmetric needle shape. Deferred — ask whether it's still wanted now

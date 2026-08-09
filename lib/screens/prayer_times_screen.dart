@@ -192,25 +192,48 @@ class _PrayerRow extends StatelessWidget {
         : '${_hour12(time.hour)}:$minuteStr '
             '${AppStrings.of(context, time.hour < 12 ? 'am' : 'pm')}';
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    // accent100/accent700 are the light-ramp tokens -- always using them for
+    // the highlighted card left the title (theme-aware `text` color, which
+    // turns near-white in dark mode) sitting on a near-white background:
+    // light-on-light with no contrast. Dark mode needs the dark-ramp
+    // equivalents instead, same pairing logic as the qibla needle's
+    // isDark branch in qibla_compass.dart.
+    final highlightBg = isDark ? AppTheme.accent900 : AppTheme.accent100;
+    final highlightBorder = isDark ? AppTheme.accent700 : AppTheme.accent300;
+    final highlightText = isDark ? AppTheme.accent100 : AppTheme.accent700;
     return Card(
-      color: highlighted ? AppTheme.accent100 : null,
+      color: highlighted ? highlightBg : null,
       shape: highlighted
           ? RoundedRectangleBorder(
               borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
-              side: const BorderSide(color: AppTheme.accent300),
+              side: BorderSide(color: highlightBorder),
             )
           : null,
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
-        title: Text(label, style: theme.textTheme.titleMedium),
-        trailing: Text(timeStr, style: theme.textTheme.titleLarge),
+        title: Text(
+          label,
+          style: highlighted
+              ? theme.textTheme.titleMedium?.copyWith(
+                  color: isDark ? AppTheme.accent100 : null,
+                )
+              : theme.textTheme.titleMedium,
+        ),
+        trailing: Text(
+          timeStr,
+          style: highlighted
+              ? theme.textTheme.titleLarge?.copyWith(
+                  color: isDark ? AppTheme.accent100 : null,
+                )
+              : theme.textTheme.titleLarge,
+        ),
         subtitle: highlighted
             ? Text(
                 remainingText == null
                     ? AppStrings.of(context, 'nextPrayer')
                     : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: AppTheme.accent700),
+                style: theme.textTheme.bodySmall?.copyWith(color: highlightText),
               )
             : null,
       ),

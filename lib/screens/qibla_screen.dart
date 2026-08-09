@@ -109,13 +109,18 @@ class _QiblaScreenState extends State<QiblaScreen> {
               }
               // QiblaCompass's needle is built pointing straight up (toward
               // the tip) at angle == 0, and canvas.rotate() turns clockwise
-              // for positive radians -- the same convention compass
-              // bearings/headings use (clockwise from north). So rotating
-              // by the raw bearing-minus-heading delta (no sign flip) is
-              // what actually points the tip at Qibla: when the device's
-              // heading matches the qibla bearing, delta is 0 and the
-              // needle points straight up the screen.
-              final angle = (qiblaBearing - heading) * pi / 180;
+              // for positive radians. The bearing-minus-heading delta
+              // (no sign flip) was tried first and reasoned to be correct
+              // from the rotation math alone, but the user confirmed live
+              // on-device that it still pointed the wrong way (commit
+              // 901c109's needle-shape fix made the ambiguous-tip bug
+              // visible, which is what surfaced this). flutter_compass's
+              // `heading` is degrees clockwise from north same as the qibla
+              // bearing, so in theory delta = bearing - heading should be
+              // the clockwise angle to turn through -- but the live result
+              // says the opposite sign is what actually lands on Qibla, so
+              // trust the device over the derivation here.
+              final angle = (heading - qiblaBearing) * pi / 180;
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
