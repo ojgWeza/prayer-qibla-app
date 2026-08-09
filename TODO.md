@@ -214,6 +214,48 @@ for the full account; short version below):
    light/dark pairing pattern already used in `qibla_compass.dart`'s needle gradient.
    `flutter analyze` + `custom_lint` + `flutter test` all green. **Not yet
    live-verified on-device.**
+6a. [x] **"Next prayer" countdown breaking after midnight — fixed (2026-08-09).**
+   User-reported: "the time until the next prayer is not calculated properly."
+   Root cause: `home_shell.dart`'s `_prayerTimes` (today's 6 times, computed via
+   `_recomputeTimesAndQibla()`) was only ever recomputed on bootstrap, location
+   change, or settings change — never on a plain day rollover. An app left open (or
+   just not touched) past midnight kept holding yesterday's times, all already in the
+   past, so `_nextPrayerKey()`/`_formatRemaining()` in `prayer_times_screen.dart` had
+   nothing to highlight and no countdown to show at all (not merely "wrong number" —
+   the next-prayer row and its countdown vanish entirely until something else happens
+   to trigger a recompute). Fixed by tracking `_prayerTimesDate` (the calendar date
+   the current `_prayerTimes` was computed for) and checking it against
+   `DateTime.now()` on the same 1-minute `_appearanceTicker` that already exists for
+   the afterMaghrib theme flip — `_recomputeIfDayChanged()` calls
+   `_recomputeTimesAndQibla()` once the date has actually moved. `flutter analyze` +
+   `custom_lint` + `flutter test` all green. **Not yet live-verified** (would need
+   leaving the app open across an actual midnight, or manipulating device clock, on
+   the Mi 10).
+6b. [x] **Inconsistent fonts — fixed (2026-08-09).** User-reported: "the font is not
+   consistent." Root cause: `app_theme.dart` built Caprasimo/Figtree/Rakkas/Noto Sans
+   Arabic via the `google_fonts` package, which downloads the actual font files over
+   the network on first use and caches them — any text that renders before that
+   download completes (or if it fails outright: no connectivity, a flaky network, a
+   fresh install with no cache yet) silently falls back to the platform default font
+   instead. That produces exactly this symptom: some text in the intended font, some
+   not, inconsistently and non-deterministically depending on device/network/timing,
+   not a fixed bug in specific text. Fixed by downloading the 4 exact font files
+   (Caprasimo-Regular, Rakkas-Regular, Figtree variable, Noto Sans Arabic variable —
+   same families as before, from the canonical `google/fonts` GitHub repo) as local
+   assets under `assets/fonts/`, declaring them in `pubspec.yaml`'s `fonts:` section,
+   and rebuilding `app_theme.dart`'s `headingFont`/`bodyFont` via
+   `base.textTheme.apply(fontFamily: ..., fontFamilyFallback: ...)` referencing the
+   bundled family names directly instead of `GoogleFonts.xTextTheme()`. Removed the
+   now-unused `google_fonts` dependency from `pubspec.yaml`. This makes font
+   rendering fully deterministic and offline-safe, which also fits the project's
+   "no backend of our own" design principle better than a runtime font CDN fetch did.
+   `flutter analyze` + `custom_lint` + `flutter test` all green. **Not yet
+   live-verified** — the in-session Flutter-web preview used for earlier redesign
+   passes hit the same "Browser pane is not displayed, screenshot times out" tooling
+   limitation noted in the RTL fix session — could not visually confirm in-browser
+   this time either. Next session/on-device: confirm both Caprasimo (headings) and
+   Figtree (body) render correctly and consistently across all 3 screens, in both
+   languages, on a cold install with no cached fonts.
 7. **Open idea, not yet implemented**: user suggested showing a Kaaba icon just
    outside the compass ring, in the direction it's pointing, as an extra disambiguation
    cue beyond the asymmetric needle shape. Deferred — ask whether it's still wanted now

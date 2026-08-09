@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Color/type/shape tokens from the "Organic" design handoff
 /// (design/Prayer times app design.zip) — warm cream/terracotta/sage
@@ -62,12 +61,24 @@ class AppTheme {
     // the design's bold-serif/clean-sans look entirely) unless an
     // Arabic-capable fallback is registered. Rakkas (display) and Noto Sans
     // Arabic (body) are the closest-feeling Arabic pairings to each.
-    final arabicHeadingFamily = GoogleFonts.rakkas().fontFamily!;
-    final arabicBodyFamily = GoogleFonts.notoSansArabic().fontFamily!;
-    final headingFont = GoogleFonts.caprasimoTextTheme(base.textTheme)
-        .apply(fontFamilyFallback: [arabicHeadingFamily]);
-    final bodyFont = GoogleFonts.figtreeTextTheme(base.textTheme)
-        .apply(fontFamilyFallback: [arabicBodyFamily]);
+    //
+    // All four are bundled as local assets (assets/fonts/, declared in
+    // pubspec.yaml) rather than fetched via `google_fonts` at runtime --
+    // that package downloads font files over the network on first use and
+    // caches them, so a fresh install with no/slow connectivity (or a
+    // request that fails) silently falls back to the platform default font
+    // for whichever text happened to render before the download completed.
+    // That is exactly what "the font is inconsistent" looks like: some text
+    // in the custom font, some not, varying by device/network/timing rather
+    // than by design intent. Bundled assets are deterministic.
+    final headingFont = base.textTheme.apply(
+      fontFamily: 'Caprasimo',
+      fontFamilyFallback: const ['Rakkas'],
+    );
+    final bodyFont = base.textTheme.apply(
+      fontFamily: 'Figtree',
+      fontFamilyFallback: const ['NotoSansArabic'],
+    );
 
     return base.copyWith(
       scaffoldBackgroundColor: bg,

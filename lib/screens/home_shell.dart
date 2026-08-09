@@ -49,6 +49,7 @@ class _HomeShellState extends State<HomeShell> {
   double? _longitude;
   DailyPrayerTimes? _prayerTimes;
   double? _qiblaBearing;
+  DateTime? _prayerTimesDate;
 
   /// Name of the manually picked city, or null while using GPS.
   String? _manualLocationName;
@@ -69,10 +70,18 @@ class _HomeShellState extends State<HomeShell> {
     _bootstrap();
     // The 'afterMaghrib' appearance mode flips purely with wall-clock time
     // (no other state change triggers a rebuild at the moment Maghrib/Fajr
-    // passes), so a light periodic tick keeps it accurate.
+    // passes), so a light periodic tick keeps it accurate. This same tick
+    // also catches the midnight day rollover: `_prayerTimes` was previously
+    // only ever recomputed on bootstrap/location/settings changes, so an app
+    // left open past midnight kept showing yesterday's (all-already-passed)
+    // times with no next prayer and a frozen/nonsensical countdown until
+    // manually refreshed.
     _appearanceTicker = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => _applyAppearance(),
+      (_) {
+        _applyAppearance();
+        _recomputeIfDayChanged();
+      },
     );
   }
 
@@ -180,6 +189,7 @@ class _HomeShellState extends State<HomeShell> {
     setState(() {
       _prayerTimes = upcomingDays.first;
       _qiblaBearing = bearing;
+      _prayerTimesDate = DateTime(today.year, today.month, today.day);
     });
 
     _rescheduleNotifications(upcomingDays);
@@ -191,6 +201,19 @@ class _HomeShellState extends State<HomeShell> {
       use24HourFormat: _use24HourFormat,
       qiblaBearing: bearing,
     );
+  }
+
+  /// Re-derives today's prayer times once the wall-clock date has actually
+  /// moved past the date they were last computed for -- see the ticker
+  /// comment in `initState` for why this is needed at all.
+  void _recomputeIfDayChanged() {
+    final lastDate = _prayerTimesDate;
+    if (lastDate == null) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (today != lastDate) {
+      _recomputeTimesAndQibla();
+    }
   }
 
   Future<void> _rescheduleNotifications(
