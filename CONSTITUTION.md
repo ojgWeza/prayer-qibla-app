@@ -336,6 +336,44 @@ session doesn't pay the same cost.
   the MSYS conversion for that one argument. Don't reach for
   `MSYS_NO_PATHCONV=1` globally — that also disables conversion of the *local* file
   path argument, which then fails to resolve instead.
+- **Wireless-adb pairing code/port shown in Settings → Developer options → Wireless
+  debugging changes every time that screen is freshly opened** — can't be reused
+  across sessions. Flow each time: `adb pair <pairing-ip:pairing-port> <code>` (the
+  code + port shown under "Pair device with pairing code"), then separately
+  `adb connect <connect-ip:connect-port>` (a *different* port, shown on the main
+  Wireless debugging screen itself). Confirmed working 2026-08-10.
+- **Confirmed (again, more thoroughly this time, 2026-08-10): don't attempt local
+  `flutter build apk` on this machine — go straight to CI.** Tried anyway this
+  session before remembering the note above already covers it, and hit a full chain
+  of environment problems beyond just the NDK-license gate already documented:
+  JDK 11 (the PATH default) is too old for Gradle, needs `JAVA_HOME` pointed at
+  `C:\Program Files\Android\openjdk\jdk-21.0.8`; SDK/NDK licenses need manually
+  created `D:\dev\licenses\android-sdk-license`/`android-sdk-preview-license` files
+  (no `sdkmanager` binary present to run `--licenses` properly); the auto-installed
+  "Android SDK Platform 37.0" writes `AndroidVersion.ApiLevel=37.0` (with a decimal)
+  into its `source.properties`, which doesn't match Gradle's `android-37` target
+  hash lookup and needs a manually duplicated+patched `android-37` platform
+  directory; and finally a **reproducible Windows-only Kotlin compiler bug** —
+  "Build Tools API" in-process compilation throws `Could not close incremental
+  caches`/`storage already registered` across 4-5 plugin modules'
+  `compileDebugKotlin` tasks, reproduced identically through a Gradle daemon
+  restart and with `org.gradle.parallel=false`, never actually solved. Abandoned in
+  favor of `gh run download` against the already-green CI build + `adb install` —
+  this is the reliable path, don't burn time on local Android builds again.
+- **`adb exec-out screencap -p > file.png` works great as a live remote-diagnosis
+  tool** — used this session to empirically test the qibla compass's rotation
+  direction by capturing before/after screenshots around a user-performed physical
+  phone rotation, instead of guessing at trig sign conventions from source alone
+  (which had already gone wrong twice in prior sessions). Confirmed the rotation
+  *direction* was mathematically correct via a controlled 90°-turn test; a separate
+  absolute-direction test (comparing against another compass app) was contaminated
+  by the physical disturbance of switching apps, and then by the phone lying flat on
+  a table (magnetometer tilt-compensation is known to be unreliable when a phone is
+  horizontal rather than held upright) — neither confirmed a real bug. **Lesson: for
+  this kind of live sensor-dependent bug, get the user to hold the phone upright and
+  stay within the one app being tested, one variable change at a time** — cross-app
+  and flat-on-table comparisons both turned out to be red herrings that cost a lot of
+  back-and-forth before being recognized as confounds rather than code bugs.
 
 ### GitHub / gh CLI
 - If `git push` is rejected for touching `.github/workflows/*.yml` with "OAuth App...
@@ -417,6 +455,27 @@ session doesn't pay the same cost.
   value, and directly caused a real layout bug (it overlapped the ad-slot). It was
   removed. One consistent placement (the app bar) is the signature; resist the urge to
   also scatter it as a second decorative flourish "for good measure."
+- **Launcher name/icon assets live outside the Dart tree and are easy to silently
+  leave stale through a whole redesign pass.** After the full Organic design-system
+  application (colors, fonts, in-app compass/watermark motif all updated across
+  several sessions), `android:label` was still the literal `prayer_qibla` Flutter
+  project placeholder, and `assets/icon/*.png` still had the pre-redesign teal
+  background and an outdated star-shape stand-in — nothing in the Dart-side work
+  ever touched either. Caught only because the user asked directly ("have you
+  included the new icon?") rather than assuming it. **When closing out a rebrand/
+  redesign pass, explicitly check `AndroidManifest.xml`'s `android:label`,
+  `assets/icon/`, and `flutter_launcher_icons.yaml`'s `adaptive_icon_background` —
+  don't assume a Flutter-side theme change covers them.**
+- **A one-off `flutter test`-based script is a good way to render deterministic PNG
+  assets (like an app icon) reusing the app's own `CustomPainter` drawing code**, when
+  no image-rasterization tool (ImageMagick, rsvg-convert, Python+Pillow) is available
+  in the environment — `dart:ui`'s `Canvas`/`PictureRecorder`/`Image.toByteData` only
+  works inside the Flutter test harness (or a running app), not plain `dart run`.
+  **Must wrap the encode/write calls in `tester.runAsync()`** — without it, the first
+  `toByteData()` call can slip through on leftover microtasks but a second one in the
+  same test hangs until the suite timeout, since `flutter_test`'s default fake-async
+  zone doesn't advance real time/microtasks for genuinely-async native work like image
+  codecs. Delete the script after use; it's a generator, not a regression test.
 
 ### Tooling notes (browser automation, image editing)
 - The in-session sandboxed Browser tool (`Claude_Browser`) has been non-functional

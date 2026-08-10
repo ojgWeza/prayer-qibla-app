@@ -170,24 +170,57 @@ is done — move it into "Done" rather than leaving it ambiguous.
 
 ## In progress / needs attention right now 🔄
 
-**Start here next session** (2026-08-08 session end — see CONSTITUTION.md's session log
+**Start here next session** (2026-08-10 session end — see CONSTITUTION.md's session log
 for the full account; short version below):
 
-1. **⚠️ STILL NOT USER-CONFIRMED — highest priority.** Live-tested on-device
-   (2026-08-09): commit `901c109`'s `angle = (qiblaBearing - heading) * pi / 180`
-   formula did change which way the needle points (confirming the needle-shape fix
-   itself works — tip vs. tail is unambiguous), but the user reported it's still
-   pointing the *wrong* direction. Rotation math (canvas.rotate is clockwise-positive,
-   relative-bearing = target - heading is the standard nav formula) says the old
-   formula should have been right, so rather than re-derive the same math again, this
-   session **flipped the sign**: `angle = (heading - qiblaBearing) * pi / 180`. This is
-   an empirical guess, not a re-derivation — the discrepancy is most likely
-   `flutter_compass`'s heading sign/reference convention differing from the assumed
-   standard on this device/platform, which can't be confirmed by reading code. **Not
-   yet live-verified** — next session, build + install + physically test against a
-   known Qibla reference before touching this again. If the sign flip is *still*
-   wrong, the bug is elsewhere (e.g. the needle's rest-angle assumption in
-   `qibla_compass.dart`, or `computeQiblaBearing`), not the sign.
+1. **⚠️ STILL NOT RESOLVED — highest priority. Live-diagnosed on-device this session
+   (2026-08-10) with a real, controlled protocol** (adb screenshots captured directly
+   off the Mi 10 via wireless adb while the user physically rotated the phone —
+   `adb exec-out screencap -p`, no manual photo needed). Two tests run:
+   - **Clean 90°-turn test** (stayed in Salaty the whole time, no app-switching):
+     baseline needle ~‑6° from up → after a stated 90° clockwise physical turn, needle
+     at ~‑58° from up, i.e. the needle rotated **~52° counterclockwise** for a **90°
+     clockwise** physical turn. That's the mathematically *correct* relative direction
+     for a device-relative bearing needle (opposite the housing's own rotation, like a
+     real compass card) — so the current sign
+     (`angle = (heading - qiblaBearing) * pi / 180` in `qibla_screen.dart`, from last
+     session's flip) is very likely NOT the bug. **Do not flip the sign again without
+     new evidence** — this was checked properly this time, unlike prior sessions.
+   - **Absolute-direction test against a second reference compass app**: contaminated
+     the first attempt (switching apps physically disturbs the phone's orientation in
+     hand) but a follow-up with the **phone lying flat on a table** (rotated to N=0° on
+     the reference app, then switched to Salaty without touching it) showed the needle
+     pointing at a fixed position that, per the user, corresponds to **true north**, not
+     the 136° Qibla bearing — i.e. the qibla offset appeared not to be applied at all in
+     that reading. However **the phone was lying flat on a table for this test**, and
+     magnetometer tilt-compensation is known to be unreliable/unstable when a phone is
+     horizontal rather than held upright — this is a very plausible confound, not
+     necessarily a code bug. Live in-app rotation tracking was separately confirmed
+     smooth/responsive (rules out a frozen/stale-sensor-stream theory).
+   - **Session ended mid-diagnosis**: asked the user to repeat the absolute-direction
+     test holding the phone upright (not flat on a table) — **answer not yet received**.
+   - **Next session: get that answer first**, before touching `qibla_screen.dart` again.
+     If upright-and-held gives a plausible southeast-ish "needle-up" direction, this
+     was a sensor/table artifact and the current code is correct as-is (close this
+     item). If it still points north/some other wrong fixed direction while held
+     upright, that's a real, reproducible bug — worth checking whether
+     `flutter_compass`'s `heading` on this device is actually magnetic vs. true north,
+     whether it's frozen at a stale value from an earlier resume, or whether
+     `qiblaBearing` itself is somehow reading as 0 inside `QiblaCompass` despite the
+     "136°" label showing correctly (re-verify `widget.qiblaBearing` is the exact same
+     value flowing into both the label `Text` and the `angle` calculation in
+     `qibla_screen.dart:123` — they use the same variable currently, but re-confirm
+     after any further edit).
+   - **Needle shape — separate complaint, not yet addressed.** User's exact words:
+     "the bug shape you added to the needle... looks very bad" — screenshots this
+     session show the tapered-blade + chevron construction from `qibla_compass.dart`
+     rendering as an odd asymmetric curved sliver rather than a clean arrow, and no
+     chevrons were visibly distinguishable in the captured screenshots. This is a
+     genuine visual-quality issue independent of the direction bug — consider
+     simplifying the blade path (`_CompassPainter` in `qibla_compass.dart`, the
+     `bladePath` `Path` starting at `qibla_compass.dart:160`) to something cleaner,
+     but this changes `DESIGN_RULES.md`'s "locked" exact needle spec, so raise it with
+     the user as a deliberate deviation before changing it, not a silent restyle.
 2. [x] Rectangular home-screen widget rebuilt to match `DESIGN_RULES.md` literally
    (exact star motif, exact two-part needle, real Organic color tokens, bundled
    Caprasimo/Figtree fonts, Hijri date, dropped location) — CI-build-verified (real
@@ -266,12 +299,53 @@ for the full account; short version below):
    without a battery-draining foreground service), not a bug, but the user's initial
    reaction was that it "shouldn't be" static. Revisit if they still want something
    different here after reading the explanation.
-9. This branch (`feature/home-screen-widget`) still carries multiple different bodies
-   of work — the original Android home-widget feature, last session's Organic
-   design-system application, and this session's widget rebuild + compass fixes — all
-   uncommitted-to-master. Consider with the user whether to split before merging, per
-   the "one branch per feature" rule in `CONSTITUTION.md` § 2.4.
-
+9. [x] **Branch-splitting decision made (2026-08-09).** Traced the actual commit
+   history (21 commits, 47 files) before deciding: the bodies of work are NOT cleanly
+   separable — the Organic design-system commit (`f936513`) touches nearly every
+   screen file, and later commits (compass fixes, custom_lint fixes, this session's
+   font/countdown fixes) all assume that redesign already landed, so cherry-picking
+   them onto a pre-redesign branch would conflict. Retroactively splitting = rewriting
+   already-pushed history for mostly-cosmetic benefit. **Decision (user-confirmed):
+   merge as one PR, enforce one-branch-per-feature strictly from the next task
+   onward.** Opened **[PR #7](https://github.com/ojgWeza/prayer-qibla-app/pull/7)** —
+   not yet merged (waiting on the open qibla-direction diagnosis above, plus general
+   on-device confirmation of this session's other fixes). CI passing on the PR's head
+   commit (`05f389e`, run `31309642868`).
+10. [x] **App display name + icon done (2026-08-09/10), pushed as commit `05f389e`,
+    CI green.** User: the launcher was showing the raw `prayer_qibla` placeholder as
+    its caption — set `android:label="Salaty"` in `AndroidManifest.xml` (plus
+    `web/index.html`/`web/manifest.json` for the verification-only web build).
+    `applicationId` unchanged (`com.hgdroid.prayer_qibla`, separately locked). Also
+    regenerated `assets/icon/icon_foreground.png`/`icon_square.png` — the previous
+    ones predated the Organic redesign (still had the old teal adaptive-icon
+    background) and the khatam-star shape correction applied elsewhere in the app.
+    Rendered fresh via a one-off `flutter test`-based generator (deleted after use)
+    reusing the exact same star construction as `star_watermark.dart`, then
+    regenerated all launcher densities via `flutter_launcher_icons`. Live-installed
+    and confirmed on the Mi 10 this session.
+11. **Local Android builds don't work on this Windows dev machine — use CI, not
+    `flutter build apk` locally.** Tried this session and burned real time on it before
+    remembering `CONSTITUTION.md` already says "no local Android SDK — builds run on
+    GitHub Actions." Local build hit a chain of environment issues (JDK 11 default too
+    old for Gradle, needed `D:\Program Files\Android\openjdk\jdk-21.0.8`; NDK/SDK
+    licenses never accepted, needed manual `D:\dev\licenses\android-sdk-license`
+    files; an installed "Android SDK Platform 37.0" directory whose
+    `AndroidVersion.ApiLevel=37.0` didn't match Gradle's expected `android-37` target
+    hash, needed a manually-patched duplicate `android-37` platform dir; and finally a
+    reproducible Windows-only Kotlin "Build Tools API" incremental-cache concurrency
+    bug — `Could not close incremental caches`/`storage already registered` — across
+    4-5 plugin modules' `compileDebugKotlin` tasks that persisted through daemon
+    restarts and `org.gradle.parallel=false`). **Abandoned rather than fully solved**
+    — reverted the `android/gradle.properties` workaround attempts, switched to
+    downloading the already-green CI artifact (`gh run download`) and installing that
+    via `adb install` instead. **Next session: don't attempt local
+    `flutter build apk` again** — go straight to `gh run list`/`gh run download`
+    against the pushed branch's latest CI run.
+12. **Wireless adb to the Mi 10 needs re-pairing most sessions** — the pairing code
+    and port shown in Settings → Developer options → Wireless debugging change each
+    time that screen is opened fresh. `adb pair <ip:pairing-port> <code>` then
+    `adb connect <ip:connect-port>` (two different ports — pairing port is one-time,
+    the connect port is what's used afterward). Confirmed working flow this session.
 ---
 
 - [ ] Confirm the 7-day rolling notification schedule actually fires correctly on a
