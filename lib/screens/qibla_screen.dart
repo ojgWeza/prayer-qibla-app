@@ -97,12 +97,19 @@ class _QiblaScreenState extends State<QiblaScreen> {
           child: StreamBuilder<CompassEvent>(
             stream: compassStream,
             builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                // Either no compass sensor, or (found live on a web verify
-                // build) a platform with no flutter_compass implementation
-                // at all -- either way the stream never emits, and the
-                // `.timeout()` above turns that into an error instead of an
-                // indefinite spinner.
+              if (snapshot.hasError ||
+                  (snapshot.connectionState == ConnectionState.done &&
+                      !snapshot.hasData)) {
+                // Either no compass sensor (the stream stays open and
+                // silent, so `.timeout()` above turns that into an error),
+                // or -- found live on a web verify build -- a platform with
+                // no flutter_compass implementation at all, where
+                // `FlutterCompass.events` returns `Stream.empty()` and
+                // closes immediately with zero events. That second case
+                // never triggers `.timeout()` (the stream finishes before
+                // the timer matters) and never sets `hasError`, so it has to
+                // be caught separately via a "done with no data" snapshot,
+                // or this falls through to the loading branch forever.
                 return Center(
                   child: Text(AppStrings.of(context, 'compassUnavailable')),
                 );

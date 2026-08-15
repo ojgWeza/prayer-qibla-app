@@ -55,4 +55,37 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     },
   );
+
+  testWidgets(
+    'shows compassUnavailable (not an infinite spinner) when the compass '
+    'stream closes immediately with zero events',
+    (tester) async {
+      // The actual shape of FlutterCompass.events on web (confirmed by
+      // reading the flutter_compass 0.8.1 source): `if (kIsWeb) return
+      // Stream.empty();`. This closes immediately with no data and no
+      // error, which `.timeout()` does not flag -- a different completion
+      // signal than the "stays open and silent" case above, and one the
+      // original fix's snapshot.hasError check alone did not catch. Found
+      // live on a web verify build: the screen spun on
+      // CircularProgressIndicator forever despite the earlier fix.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: true),
+          home: QiblaScreen(
+            locationState: LocationState.granted,
+            qiblaBearing: 136.0,
+            language: 'en',
+            onRetryLocation: () async {},
+            debugCompassStreamOverride: Stream<CompassEvent>.empty(),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(find.text(AppStrings.forLanguage('en', 'compassUnavailable')),
+          findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
 }
