@@ -70,54 +70,76 @@ class SettingsScreen extends StatelessWidget {
         const Divider(),
         ListTile(
           title: Text(AppStrings.of(context, 'calculationMethod')),
-          trailing: DropdownButton<String>(
-            value: calculationMethod,
-            onChanged: (v) {
-              if (v != null) onCalculationMethodChanged(v);
-            },
-            items: [
-              for (final method in availableCalculationMethods)
-                DropdownMenuItem(value: method, child: Text(method)),
-            ],
+          trailing: SizedBox(
+            width: 150,
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: calculationMethod,
+              onChanged: (v) {
+                if (v != null) onCalculationMethodChanged(v);
+              },
+              items: [
+                for (final method in availableCalculationMethods)
+                  DropdownMenuItem(
+                    value: method,
+                    child: Text(method, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+            ),
           ),
         ),
         const Divider(),
         ListTile(
           title: Text(AppStrings.of(context, 'madhab')),
-          trailing: DropdownButton<String>(
-            value: madhab,
-            onChanged: (v) {
-              if (v != null) onMadhabChanged(v);
-            },
-            items: [
-              DropdownMenuItem(
-                value: 'shafi',
-                child: Text(AppStrings.of(context, 'shafi')),
-              ),
-              DropdownMenuItem(
-                value: 'hanafi',
-                child: Text(AppStrings.of(context, 'hanafi')),
-              ),
-            ],
+          trailing: SizedBox(
+            width: 130,
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: madhab,
+              onChanged: (v) {
+                if (v != null) onMadhabChanged(v);
+              },
+              items: [
+                DropdownMenuItem(
+                  value: 'shafi',
+                  child: Text(
+                    AppStrings.of(context, 'shafi'),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: 'hanafi',
+                  child: Text(
+                    AppStrings.of(context, 'hanafi'),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const Divider(),
         ListTile(
           title: Text(AppStrings.of(context, 'weekStart')),
-          trailing: DropdownButton<int>(
-            value: weekStart,
-            onChanged: (v) {
-              if (v != null) onWeekStartChanged(v);
-            },
-            items: [
-              for (var offset = 0; offset < 7; offset++)
-                DropdownMenuItem(
-                  value: offset,
-                  child: Text(
-                    AppStrings.of(context, 'fullDay${offset + 1}'),
+          trailing: SizedBox(
+            width: 150,
+            child: DropdownButton<int>(
+              isExpanded: true,
+              value: weekStart,
+              onChanged: (v) {
+                if (v != null) onWeekStartChanged(v);
+              },
+              items: [
+                for (var offset = 0; offset < 7; offset++)
+                  DropdownMenuItem(
+                    value: offset,
+                    child: Text(
+                      AppStrings.of(context, 'fullDay${offset + 1}'),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
         const Divider(height: 32),
