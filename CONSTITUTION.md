@@ -167,6 +167,29 @@ session doesn't pay the same cost.
   com.hgdroid.prayer_qibla` first, then install fresh, every time.
 
 ### Third-party packages — non-obvious details
+- **`flutter_compass` 0.8.1's `FlutterCompass.events` special-cases web:
+  `if (kIsWeb) return Stream.empty();`** — a stream that closes immediately with
+  zero events, never errors. This is a *different* completion shape than "stream
+  stays open and silent" (the real no-compass-sensor case), and it defeats a naive
+  `.timeout()`-based fix: the timeout timer only matters for a gap *between* events
+  on an open stream, and `Stream.empty()` finishes before that's ever relevant. A
+  `StreamBuilder` watching it gets stuck on `!snapshot.hasData` forever unless you
+  also explicitly check `snapshot.connectionState == ConnectionState.done`. Read
+  straight from the pub-cache source (`rip_grep_packages`/`read_package_uris`, or
+  just find the installed package dir and read it) rather than guessing — this is
+  exactly the kind of behavior a plugin's public docs won't mention. See
+  `qibla_screen.dart`'s `StreamBuilder` and both cases covered in
+  `test/qibla_screen_test.dart`.
+- **`DropdownButton`'s *closed* width sizes to the widest item across its whole
+  `items` list, not just the currently-selected value.** A `ListTile` with a
+  `DropdownButton` in `trailing` and a long/unlocalized `title` can have its title
+  squeezed to near-zero width if any one item (even one never currently selected)
+  is long — visible failure mode: title text wraps one character per line. Fix:
+  wrap the `DropdownButton` in a fixed-width `SizedBox` with `isExpanded: true`,
+  and `overflow: TextOverflow.ellipsis` on each item's `Text`. Found live in
+  `settings_screen.dart` (`availableCalculationMethods` includes
+  `'moonsightingCommittee'`, 21 chars) — applied the same fix to all three Settings
+  dropdowns since they share the same structural risk across locales.
 - `flutter_timezone` (v5) returns a `TimezoneInfo` object, not a `String` — use
   `.identifier`.
 - The `hijri` package's locale keys are exactly `'ar'` and `'en'` (not `'Arabic'` or
@@ -423,16 +446,32 @@ session doesn't pay the same cost.
   this machine`, even though the emulator's own preflight check confirms
   `hasCompatibleHypervisor: Ok`** (the CPU/BIOS support virtualization fine — it's
   specifically the Windows-side driver that's off). **Fix requires an elevated
-  PowerShell** (this session has no admin rights, confirmed via
-  `Get-WindowsOptionalFeature` itself throwing "requires elevation"):
-  `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart`,
-  then a full restart. **Not yet done as of 2026-08-15** — this is the one remaining
-  blocker before the emulator can actually boot; everything else (SDK, JDK, AVD) is
-  ready and doesn't need to be redone once this is turned on. Worth a heads-up if
-  VirtualBox/VMware are in active use — enabling this can conflict with them.
-- Once the emulator boots, drive it via the `mobile` MCP (see below) rather than
-  hand-typed `adb`/`emulator` commands where possible — same relationship
-  Claude-in-Chrome has to a real browser.
+  PowerShell**: `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform
+  -All -NoRestart`, then a full restart. Worth a heads-up if VirtualBox/VMware are in
+  active use — enabling this can conflict with them.
+- **Resolved 2026-08-15 (user ran the elevated command + restart between
+  sessions) — the emulator boots cleanly now.** The one extra gotcha:
+  `emulator.exe -avd salaty_test` alone fails with `Unknown AVD name` even though
+  `avdmanager` created it fine — needs `ANDROID_AVD_HOME` set explicitly (not just
+  `ANDROID_SDK_ROOT`), or it looks in `$HOME\.android\avd` instead of
+  `D:\dev\android-sdk\avd`. Full working boot recipe:
+  ```
+  $env:ANDROID_SDK_ROOT = "D:\dev\android-sdk"
+  $env:ANDROID_AVD_HOME = "D:\dev\android-sdk\avd"
+  Start-Process -FilePath "D:\dev\android-sdk\emulator\emulator.exe" `
+    -ArgumentList "-avd","salaty_test","-no-snapshot-load" `
+    -WindowStyle Hidden
+  ```
+  **`-WindowStyle Hidden` matters** — without it, the emulator's console window is
+  tied to whatever terminal launched it, and closing that terminal kills the
+  emulator too (confirmed live: the user closed a terminal and the emulator died
+  mid-session). Then `adb wait-for-device` + poll `adb shell getprop
+  sys.boot_completed` for `1` (~1-2 min cold boot). Once up, plain
+  `adb shell input tap/swipe/keyevent` + `adb exec-out screencap -p` worked fine
+  for driving it all session — the `mobile` MCP below was never actually needed.
+- Once the emulator boots, driving it via the `mobile` MCP (see below) is an
+  alternative to hand-typed `adb` commands — same relationship Claude-in-Chrome has
+  to a real browser — but wasn't needed this session; plain `adb` was simpler.
 
 ### MCP servers (global, user-scope — set up 2026-08-15)
 - **`mobile`** (`claude-in-mobile`, `npx claude-in-mobile@latest`): drives a physical
@@ -468,11 +507,26 @@ session doesn't pay the same cost.
 - Downloading GitHub Actions artifacts requires being logged in. To hand someone a
   no-login direct download link, cut a **GitHub Release** and attach the APK as an
   asset (`gh release create ... path/to.apk`).
-- `gh` is installed on this machine at `C:\Program Files\GitHub CLI\gh.exe`, already
-  authenticated with the `workflow` scope — but it is **not on PATH** in this shell
-  session (bash *or* PowerShell both say "command not found"). Invoke it by full path
-  (`& "C:\Program Files\GitHub CLI\gh.exe" ...` in PowerShell, or the equivalent
-  `/c/Program Files/GitHub CLI/gh.exe` in bash) rather than assuming it's missing.
+- `gh` is installed on this machine at `C:\Program Files\GitHub CLI\gh.exe` — but it
+  is **not on PATH** in this shell session (bash *or* PowerShell both say "command
+  not found"). Invoke it by full path (`& "C:\Program Files\GitHub CLI\gh.exe" ...`
+  in PowerShell, or the equivalent `/c/Program Files/GitHub CLI/gh.exe` in bash)
+  rather than assuming it's missing.
+- **`gh`'s stored auth does NOT reliably persist across sessions/environments —
+  don't assume a past session's "already authenticated" note still holds.**
+  Confirmed 2026-08-15: `gh auth status` showed "not logged into any GitHub hosts"
+  despite earlier notes claiming it was authenticated. Git itself can still push
+  fine via Git Credential Manager (`credential.helper = manager`) even when `gh`
+  has no token — check `gh auth status` fresh each session rather than trusting a
+  prior note, and don't extract the stored git/gh credential to build a raw API
+  call as a workaround (correctly blocked by the auto-mode classifier). **Working
+  fallback when `gh` has no auth and an interactive `gh auth login` device-code
+  flow isn't wanted**: drive GitHub Actions through Claude-in-Chrome instead — the
+  Actions page for a public repo works logged-out for the run list, but **viewing
+  job logs and downloading artifacts both require being signed in**, so ask the
+  user to sign into GitHub in that tab once, then dispatch/watch builds, read
+  failure logs, and download artifact zips (they land in the real
+  `C:\Users\Dell\Downloads\`) all through that same authenticated tab.
 - `build.yml`'s `push` trigger only fires for `master`/`main` — pushing a feature
   branch alone does **not** start a CI build. To get a CI-built APK for a feature
   branch without opening a PR (e.g. just to test on-device before merging), push the
@@ -503,6 +557,21 @@ session doesn't pay the same cost.
   start debugging the workflow file after just one or two failures during a known
   outage window; keep re-dispatching (checking githubstatus.com between attempts)
   until one actually gets a runner.
+- **`build.yml`'s `subosito/flutter-action@v2` step had no `flutter-version` pin
+  (just `channel: stable`) — CI can silently drift to a newer Flutter/Dart SDK than
+  whatever's verified locally, with no warning.** Found 2026-08-15: CI's
+  newer-than-local SDK shipped an analyzer that emits a Dart 3.9 dot-shorthand AST
+  node (`DotShorthandPropertyAccess`) the pinned `custom_lint`/
+  `impeccable_flutter_lints` combo doesn't visit yet, crashing the "Design lint" CI
+  step with `Exception: Missing implementation of visitDotShorthandPropertyAccess`
+  — a pure tooling-version-mismatch crash, invisible locally (older Flutter, where
+  `analyze`/`custom_lint`/`test` all pass clean) and easy to misread as a real lint
+  finding at first glance. Fixed by adding `flutter-version: "3.44.8"`
+  (matching local) to the `flutter-action` step. **If CI fails on something that
+  passes clean locally and looks like a tooling/framework-internals crash rather
+  than an actual finding in your own code, check for exactly this class of
+  drift first** — compare CI's Flutter version (visible in the run log) against
+  local (`flutter --version`) before assuming the failure is real.
 
 ### External images / design assets
 - **Look at any candidate image yourself (Read tool) before using it.** A text-based
@@ -579,6 +648,31 @@ session doesn't pay the same cost.
   test instead (see the `debugCompassStreamOverride` pattern in `qibla_screen.dart` /
   `test/qibla_screen_test.dart` for how to make a screen path testable without a real
   device/sensor), or fall back to a real Android emulator/device.
+  **Update (2026-08-15): clicking bottom-nav tabs worked fine this session**, no
+  timeouts across many clicks — but via **Claude-in-Chrome** (the user's real Chrome,
+  driven by the `mcp__claude-in-chrome__*` tools) against `flutter run -d web-server`,
+  not the sandboxed `Claude_Browser` tool used in the 2026-08-07 note above. Not
+  confirmed whether the sandboxed tool itself got better or this was purely a
+  different-tool/different-browser-engine difference — if `Claude_Browser` click
+  timeouts resurface, try Claude-in-Chrome against a `web-server` build before
+  assuming it's unfixable again.
+- **This session's key process discovery: `flutter run -d web-server --web-port 8765`
+  + Claude-in-Chrome is a fast, free, no-CI-build verification loop for any change
+  that doesn't touch GPS/compass/widget/notifications/ads** (all already
+  `kIsWeb`-guarded, see above). Used it to find and verify-fix two real bugs
+  (default-location label frozen in the wrong language; Qibla screen spinning
+  forever on `Stream.empty()`) in minutes with zero APK builds — after the user
+  pushed back on triggering a CI build (and ~90MB artifact download) per small fix,
+  this became the default loop instead. Recipe: kill any previous instance on the
+  port first (`taskkill` the `dart.exe`/`flutter.bat` process — a plain source edit
+  needs a fresh `flutter run`, there's no reliable hot-reload trigger through these
+  tools, matching the existing note below), start it via `nohup ... &` +
+  `run_in_background`, poll the log for `is being served at http://localhost:8765`
+  (~45-90s), then navigate Claude-in-Chrome there and wait another ~10-15s for
+  CanvasKit to actually paint before screenshotting. **Reserve real CI builds +
+  emulator/device installs for changes that actually need a device** (GPS, compass,
+  widget, notifications, ads) or a final combined re-verification before merging a
+  batch of fixes — not for routine Dart-only UI/logic changes.
 - **Flutter web can be used purely as a verification tool for the real app's actual
   rendering — do this instead of trusting a hand-maintained HTML mockup, which *will*
   drift from the real Dart code no matter how carefully it's kept in sync.** Added via

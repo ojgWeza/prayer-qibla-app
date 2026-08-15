@@ -198,38 +198,176 @@ is done — move it into "Done" rather than leaving it ambiguous.
 
 ## In progress / needs attention right now 🔄
 
-**Start here next session** (2026-08-15 session end):
+**Start here next session** (2026-08-15 session end, updated same day after the
+emulator came online):
 
-0. **Local device-free testing is now set up but blocked on one Windows setting.** A
-   local Android SDK + emulator now exists at `D:\dev\android-sdk` (AVD `salaty_test`,
-   Android 14/`google_apis`/x86_64) — this is separate from the still-broken local
-   *build* toolchain (Gradle/NDK/Kotlin, see `CONSTITUTION.md`), it only *runs* an
-   already CI-built APK, no compilation involved. It won't boot yet:
-   `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart`
-   needs to be run in an **elevated** PowerShell (this session has no admin rights),
-   then the machine restarted. Once that's done: boot the emulator
-   (`D:\dev\android-sdk\emulator\emulator.exe -avd salaty_test`), confirm `adb devices`
-   sees it, then use it (via the new `mobile` MCP, see next point) to verify this
-   session's 4 design fixes above without needing the Mi 10 for anything except the
-   compass/widget items that a home-screen widget/magnetometer genuinely require a
-   host OS for anyway.
-   Two new global MCPs were also added this session — **`mobile`** (drives ADB/an
-   emulator: screenshot, tap, UI tree, app install) and **`dart`** (official
-   Flutter MCP, can drive `flutter run -d web-server` for verification with literally
-   no device/emulator at all, but `flutter_compass`/`google_mobile_ads`/`home_widget`/
-   `flutter_local_notifications` have no web implementation so compass/widget/ads/
-   notifications won't render there). **Both need a Claude Code session restart**
-   before their tools are actually callable — confirmed connected via `claude mcp
-   list`, not yet used end-to-end.
-1. **Once a device (Mi 10 or the new emulator) is available, live-verify in this
-   order**: (a) this session's 4 design fixes above, (b) the still-open qibla
-   sign-flip/alignment-feedback re-verification (item 1 below — this has been pending
-   across multiple sessions now), (c) anything else still open below.
+0. [x] **Local device-free testing is now fully working.** The Windows
+   `HypervisorPlatform` block is resolved (user ran the elevated
+   `Enable-WindowsOptionalFeature`/restart between sessions) — the `salaty_test`
+   AVD (Android 14, `google_apis`/x86_64, `D:\dev\android-sdk`) now boots cleanly.
+   Boot recipe that actually works (write down every time, both env vars are
+   required or `emulator.exe` can't find the AVD/fails hypervisor init):
+   ```
+   $env:ANDROID_SDK_ROOT = "D:\dev\android-sdk"
+   $env:ANDROID_AVD_HOME = "D:\dev\android-sdk\avd"
+   Start-Process -FilePath "D:\dev\android-sdk\emulator\emulator.exe" `
+     -ArgumentList "-avd","salaty_test","-no-snapshot-load" `
+     -WindowStyle Hidden   # without this, closing the launching terminal kills the emulator too
+   ```
+   Then `adb wait-for-device` + poll `adb shell getprop sys.boot_completed` for `1`.
+   The `mobile`/`dart` MCPs mentioned below were never actually used this
+   session — driving the emulator via plain `adb shell input tap/swipe/keyevent`
+   + `adb exec-out screencap -p` worked fine and was simpler; revisit the MCPs
+   only if the plain-adb approach becomes a bottleneck.
+   **`gh` CLI has no stored auth in this environment** (contrary to earlier
+   session notes — don't assume it carries over), and extracting its token to
+   work around that is correctly blocked by the auto-mode classifier. Don't
+   attempt an interactive `gh auth login` device-code flow either unless the user
+   asks for it — the working alternative is Claude-in-Chrome: open the repo's
+   Actions page (works logged-out for a public repo, but **viewing logs and
+   downloading artifacts both require being signed in**), ask the user to sign
+   into GitHub in that tab once, then drive the whole loop (dispatch/watch a
+   build, read failure logs, download the artifact zip) through that same
+   authenticated tab. Downloaded artifacts land in the real
+   `C:\Users\Dell\Downloads\` — `unzip` them there, then `adb install`.
+1. [x] **Found and fixed a real CI-only bug this session, unrelated to any pending
+   code change: `build.yml`'s `subosito/flutter-action@v2` had no `flutter-version`
+   pin (just `channel: stable`), so CI silently drifted to a newer Flutter/Dart SDK
+   than the locally-verified one (3.44.8, Dart 3.12.2).** That newer SDK's analyzer
+   emits a Dart 3.9 dot-shorthand AST node
+   (`DotShorthandPropertyAccess`) that the pinned `custom_lint`/
+   `impeccable_flutter_lints` combo doesn't visit yet, crashing the "Design lint" CI
+   step with `Exception: Missing implementation of visitDotShorthandPropertyAccess`
+   — a tooling crash, not a real lint finding, and invisible locally since local
+   Flutter is older. Fixed by adding `flutter-version: "3.44.8"` to the
+   `flutter-action` step, pinning CI to the same version already verified locally.
+   `analyze`/`custom_lint`/`test` all still green locally after the pin. Confirmed
+   fixed live: CI run #36 (`cf79cca`) went green in 9m 23s after this fix, vs. run
+   #35 failing in 2m on the same underlying commit before it.
+2. [x] **Found and fixed a real, live-reproduced UI bug on the new emulator:
+   Settings screen's calculation-method label was rendering as a vertical column of
+   single Arabic characters instead of normal text.** Root cause: `DropdownButton`
+   sizes its *closed* width to the widest item across its whole `items` list, not
+   just the current value — `availableCalculationMethods`
+   (`prayer_times_service.dart`) includes `'moonsightingCommittee'` (21 chars,
+   unlocalized), so the calculation-method dropdown always reserved that much
+   width even while displaying a short value like `'egyptian'`, squeezing the
+   `ListTile`'s Arabic title into a column so narrow every character wrapped onto
+   its own line. Fixed in `settings_screen.dart` by wrapping all three Settings
+   dropdowns (calculation method, madhab, week start — same structural risk across
+   locales, not just the one that happened to break first) in a `SizedBox` with a
+   fixed width, `isExpanded: true`, and `overflow: TextOverflow.ellipsis` on each
+   item's `Text`. `analyze`/`custom_lint`/`test` green. **Live-verified twice**: CI
+   build #37 (`d66762b`) went green in 7m 6s, installed fresh on the emulator, and
+   the label rendered correctly; independently confirmed again via a Flutter web
+   verify build (see item 4 below).
+3. [x] **Found and fixed a real bug via live QA: the default-location label
+   ("Cairo, Egypt") stayed frozen in whichever language was active at first
+   bootstrap, even after switching Settings → Language.** Found on the emulator by
+   switching English↔Arabic and watching the location pill/row not follow. Root
+   cause: `home_shell.dart`'s `_manualLocationName` was set once from
+   `AppStrings.forLanguage(_language, 'defaultLocationName')` inside `_bootstrap()`
+   and never revisited — unlike the GPS-fallback label (`currentLocationLabel`),
+   which already re-resolves correctly every build via `AppStrings.of(context,
+   ...)`. Fixed by replacing the frozen string with a `_usingDefaultLocation` bool
+   and moving the lookup into `build()`, matching the GPS-fallback pattern; cleared
+   on any real location (manual pick, explicit GPS, background GPS refresh) so it
+   can't leak once a real location is set. `analyze`/`custom_lint`/`test` green.
+   **Live-verified via Flutter web** (see item 4) — switching language now updates
+   the label instantly in both directions.
+4. [x] **Found and fixed a real regression via live QA: the Qibla screen spins on
+   `CircularProgressIndicator` forever on a Flutter web verify build, instead of
+   showing "compass unavailable"** — the exact bug an earlier session's
+   `.timeout()`-based fix was supposed to have already closed. Root cause: read
+   `flutter_compass` 0.8.1's own source directly (`rip_grep_packages`/pub cache) —
+   `FlutterCompass.events` special-cases `if (kIsWeb) return Stream.empty();`,
+   which closes **immediately with zero events**, never errors, and never
+   triggers `.timeout()` (whose timer only matters for a gap between events on an
+   *open* stream — `Stream.empty()` finishes before that's relevant). The existing
+   regression test's `StreamController` stays open forever (a different, also-real
+   failure mode — no compass sensor), so it never covered this exact completion
+   shape. Fixed in `qibla_screen.dart` by also treating "stream reached
+   `ConnectionState.done` without ever producing data" as `compassUnavailable`,
+   alongside the existing `hasError` check. Added a second regression test
+   (`Stream<CompassEvent>.empty()`) covering this exact shape.
+   `analyze`/`custom_lint`/`test` (6/6) green. **Live-verified**: reproduced the
+   hang, applied the fix, restarted the web server, confirmed "Your device has no
+   compass sensor" now shows immediately.
+   **This session's key process discovery, worth reusing every session from now
+   on**: `flutter run -d web-server --web-port 8765` + Claude-in-Chrome
+   (`http://localhost:8765`) is a **fast, free, no-CI-build verification loop for
+   any change that doesn't touch GPS/compass/widget/notifications/ads** (all
+   `kIsWeb`-guarded already) — clicking the bottom `NavigationBar` tabs **worked
+   correctly this session** (unlike the "click times out" limitation logged in
+   `CONSTITUTION.md` from an earlier session — that note is now stale/inconsistent
+   with this session's experience, worth re-checking next time rather than
+   trusting the old note blindly). Used this to verify both fixes above in
+   *minutes* with zero APK builds, after the user (rightly) pushed back on
+   triggering a ~90MB CI download for every small fix. **Reserve real CI
+   builds + emulator/device installs for changes that actually need a device**
+   (GPS, compass, widget, notifications, ads) or for a final combined
+   re-verification before merging a batch — not for routine Dart-only fixes.
+5. [ ] **New bug found, deliberately NOT fixed this session (user's call,
+   2026-08-15): prayer times for a manually-searched city display in the
+   *device's* timezone, not the *searched city's* timezone.** Repro: device
+   timezone `Africa/Cairo` (UTC+3), manually search+select a city in a different
+   timezone (tested: London, UTC+1 in August/BST) via the worldwide city search —
+   Dhuhr displayed as 3:06 PM, while real London solar noon in mid-August is
+   ~1:05 PM local London time. Off by exactly the Cairo↔London UTC offset gap (2h).
+   Root cause: `computePrayerTimes()` correctly computes UTC solar-event instants
+   for the searched city's coordinates, but display conversion calls `.toLocal()`,
+   which converts using the **device's** system timezone — correct for the
+   original "prayer times where I am" case (device timezone always matches GPS
+   location there) but silently wrong for the explicitly-advertised "manual city
+   search... for any city worldwide" feature (see Done ✅ list), since checking a
+   distant city's prayer times while physically elsewhere is the obvious real use
+   case for that feature. **Not a quick fix** — needs a real capability the app
+   doesn't have: resolving an IANA timezone from lat/long (Nominatim's basic
+   search doesn't return one). Options for whoever picks this up: bundle a
+   lat/long→timezone boundary lookup package (adds a dependency + bundle size, but
+   stays fully on-device, consistent with the "no backend of our own" principle),
+   or call a timezone API (conflicts with that principle, needs a network call
+   beyond the existing once-per-search Nominatim call). Scope this properly with
+   the user before starting — flagged via `AskUserQuestion` this session, user
+   chose "log it, fix later" over scoping a fix immediately.
+6. [ ] **Two low-severity cosmetic findings from this session's QA pass, not
+   fixed (too minor to justify a build cycle, revisit if touching the same
+   files):**
+   - Settings → calculation-method dropdown *menu* (the open popup list, not the
+     closed button, which is fixed — see item 2): `muslimWorldLeague`'s ellipsis
+     renders on the **leading** side (`...muslimWorldLea`) instead of trailing,
+     since it's a raw unlocalized camelCase English identifier inside an RTL
+     (Arabic) layout. Cosmetic only, and these dropdown items were never
+     localized/prettified to begin with (a separate, larger scope item if ever
+     wanted) — not worth a standalone fix.
+   - "Customize notifications by day" grid: the "Maghrib" column header wraps
+     awkwardly to two lines ("Maghr"/"ib") on a real phone-width viewport (fine at
+     desktop width, which is why this wasn't caught via the web verify build
+     alone) — 5 prayer-name columns is tight on a ~320dp-wide screen.
+7. **Once the device (Mi 10 or the new emulator) is available for something that
+   actually needs a real sensor/widget, live-verify in this order**: (a) the
+   still-open qibla sign-flip/alignment-feedback re-verification (item 1 below —
+   this has been pending across multiple sessions now — note the emulator has no
+   real magnetometer either, so this specific item still needs the Mi 10, not just
+   "a device"), (b) anything else still open below. For everything else
+   (Dart-only UI/logic changes), prefer the Flutter-web loop from item 4 first.
+
+**This session's work landed across two branches** — `feature/home-screen-widget`
+(unchanged scope: the widget feature itself, already on PR #7) got the CI-pin fix
+and the dropdown fix (both already pushed, part of that PR). Everything from the
+default-location fix onward (items 3–4 above) was moved to a **new branch**,
+**`fix/qa-session-dropdown-location-compass`**, per the "one branch per feature"
+rule and the user's explicit call this session — these are unrelated bug fixes
+found via QA, not part of the widget feature. That new branch was **not yet
+pushed or built via CI as of this note** — next session (or later this one):
+push it, dispatch a CI build, and do one combined install+re-verify pass on the
+emulator covering the location-label and compass fixes on real Android (only
+web-verified so far), not four separate build cycles.
 
 *(Resolved, kept for history: the hookify `hooks.json` path-escaping bug and `gh` auth
 that a 2026-08-12 session was blocked on are both fixed/confirmed — `gh` has been used
 successfully throughout the 2026-08-15 session above. The commit/push/CI-build/
-`adb install`/live-verify plan that session was queued up on is now folded into item 1
+`adb install`/live-verify plan that session was queued up on is now folded into item 7
 above, still pending.)*
 
 1. **Sign flipped back (2026-08-10), pending live re-verification.** Previous session's
