@@ -1,6 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 
-enum LocationState { granted, denied, deniedForever, serviceDisabled }
+enum LocationState { unknown, granted, denied, deniedForever, serviceDisabled }
 
 class LocationResult {
   final LocationState state;

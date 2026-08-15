@@ -6,6 +6,7 @@ import '../l10n/app_strings.dart';
 import '../services/date_service.dart';
 import '../services/location_service.dart';
 import '../services/prayer_times_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/banner_ad_widget.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
@@ -79,6 +80,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     final nextKey = _nextPrayerKey(times);
     final today = DateTime.now();
+    final remainingText = nextKey == null
+        ? null
+        : _formatRemaining(
+            context,
+            times.ordered
+                .firstWhere((entry) => entry.key == nextKey)
+                .value
+                .difference(today),
+          );
 
     return Column(
       children: [
@@ -99,6 +109,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                     time: entry.value,
                     highlighted: entry.key == nextKey,
                     use24HourFormat: widget.use24HourFormat,
+                    remainingText:
+                        entry.key == nextKey ? remainingText : null,
                   ),
               ],
             ),
@@ -136,6 +148,22 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
+/// Formats a countdown to the next prayer, e.g. "4 hours & 46 minutes
+/// remaining" or "12 minutes remaining" once under an hour. Clamps negative
+/// durations (the boundary moment right as a prayer time passes) to zero.
+String _formatRemaining(BuildContext context, Duration remaining) {
+  final clamped = remaining.isNegative ? Duration.zero : remaining;
+  final hours = clamped.inHours;
+  final minutes = clamped.inMinutes % 60;
+  if (hours > 0) {
+    return AppStrings.of(context, 'remainingHoursMinutes')
+        .replaceFirst('{h}', '$hours')
+        .replaceFirst('{m}', '$minutes');
+  }
+  return AppStrings.of(context, 'remainingMinutes')
+      .replaceFirst('{m}', '$minutes');
+}
+
 int _hour12(int hour24) {
   final h = hour24 % 12;
   return h == 0 ? 12 : h;
@@ -146,12 +174,14 @@ class _PrayerRow extends StatelessWidget {
   final DateTime time;
   final bool highlighted;
   final bool use24HourFormat;
+  final String? remainingText;
 
   const _PrayerRow({
     required this.label,
     required this.time,
     required this.highlighted,
     required this.use24HourFormat,
+    this.remainingText,
   });
 
   @override
@@ -162,15 +192,73 @@ class _PrayerRow extends StatelessWidget {
         : '${_hour12(time.hour)}:$minuteStr '
             '${AppStrings.of(context, time.hour < 12 ? 'am' : 'pm')}';
     final theme = Theme.of(context);
-    return Card(
-      color: highlighted ? theme.colorScheme.primaryContainer : null,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        title: Text(label, style: theme.textTheme.titleMedium),
-        trailing: Text(timeStr, style: theme.textTheme.titleLarge),
-        subtitle: highlighted
-            ? Text(AppStrings.of(context, 'nextPrayer'))
-            : null,
+    final isDark = theme.brightness == Brightness.dark;
+    // accent100/accent700 are the light-ramp tokens -- always using them for
+    // the highlighted card left the title (theme-aware `text` color, which
+    // turns near-white in dark mode) sitting on a near-white background:
+    // light-on-light with no contrast. Dark mode needs the dark-ramp
+    // equivalents instead, same pairing logic as the qibla needle's
+    // isDark branch in qibla_compass.dart.
+    final highlightBg = isDark ? AppTheme.accent900 : AppTheme.accent100;
+    final highlightBorder = isDark ? AppTheme.accent700 : AppTheme.accent300;
+    final highlightText = isDark ? AppTheme.accent100 : AppTheme.accent700;
+    // Matches CardTheme's own rest-state tokens (app_theme.dart) so the
+    // animated version below looks identical to a plain Card when unhighlighted.
+    final restBg = theme.colorScheme.surface;
+    final restBorder = theme.colorScheme.outline;
+    const highlightDuration = Duration(milliseconds: 200);
+    const highlightCurve = Curves.easeOut;
+    final titleStyle = highlighted
+        ? theme.textTheme.titleMedium?.copyWith(
+            color: isDark ? AppTheme.accent100 : null,
+          )
+        : theme.textTheme.titleMedium;
+    final trailingStyle = highlighted
+        ? theme.textTheme.titleLarge?.copyWith(
+            color: isDark ? AppTheme.accent100 : null,
+          )
+        : theme.textTheme.titleLarge;
+    // Which row is "next" can change instantly (a settings edit reshuffles
+    // it, or a prayer time passes while the app is open) -- an AnimatedContainer
+    // (Card's color/shape aren't implicitly animatable) plus AnimatedDefaultTextStyle
+    // keep the background/border and text colors crossfading together instead
+    // of one snapping ahead of the other.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: AnimatedContainer(
+        duration: highlightDuration,
+        curve: highlightCurve,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: highlighted ? highlightBg : restBg,
+          borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
+          border: Border.all(color: highlighted ? highlightBorder : restBorder),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: ListTile(
+            title: AnimatedDefaultTextStyle(
+              duration: highlightDuration,
+              curve: highlightCurve,
+              style: titleStyle ?? const TextStyle(),
+              child: Text(label),
+            ),
+            trailing: AnimatedDefaultTextStyle(
+              duration: highlightDuration,
+              curve: highlightCurve,
+              style: trailingStyle ?? const TextStyle(),
+              child: Text(timeStr),
+            ),
+            subtitle: highlighted
+                ? Text(
+                    remainingText == null
+                        ? AppStrings.of(context, 'nextPrayer')
+                        : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
+                    style: theme.textTheme.bodySmall?.copyWith(color: highlightText),
+                  )
+                : null,
+          ),
+        ),
       ),
     );
   }
@@ -188,7 +276,7 @@ class _PermissionMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.location_off, size: 48),
+            const Icon(Icons.location_off_rounded, size: 48),
             const SizedBox(height: 16),
             Text(
               AppStrings.of(context, 'locationDenied'),

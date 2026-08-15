@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Islamic 8-point (rub el hizb) star motif, exact points from
+     DESIGN_RULES.md, viewBox -100,-100,200,200 translated to a 0..200
+     Android vector viewport. Used once, centered, low opacity, on top of
+     the Qibla compass in the widget's motif panel — never tiled. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp"
+    android:height="110dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path
+        android:pathData="M190,100 L36.4,163.6 L100,10 L163.6,163.6 L10,100 L163.6,36.4 L100,190 L36.4,36.4 Z"
+        android:fillColor="#1A1610"
+        android:fillAlpha="0.45"
+        android:fillType="evenOdd" />
+</vector>

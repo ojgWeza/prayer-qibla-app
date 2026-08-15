@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 /// Central place for AdMob ad unit ids.
@@ -9,11 +10,19 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 /// placeholders and always serve test creatives.
 class AdIds {
   static String get bannerAdUnitId {
-    if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/6300978111';
+    if (!kIsWeb && Platform.isAndroid) {
+      return 'ca-app-pub-3940256099942544/6300978111';
+    }
     return 'ca-app-pub-3940256099942544/2934735716'; // iOS test banner
   }
 }
 
 class AdService {
-  Future<void> init() => MobileAds.instance.initialize();
+  // google_mobile_ads has no web implementation -- AdMob is Android/iOS
+  // only for this app; skip init on web instead of throwing before
+  // runApp() ever gets a chance to render.
+  Future<void> init() async {
+    if (kIsWeb) return;
+    await MobileAds.instance.initialize();
+  }
 }

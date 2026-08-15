@@ -84,7 +84,7 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: AppStrings.of(context, 'searchCityHint'),
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search_rounded),
                 border: const OutlineInputBorder(),
               ),
               onChanged: _onChanged,
@@ -103,7 +103,7 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
           ),
           const SizedBox(height: 8),
           ListTile(
-            leading: const Icon(Icons.my_location),
+            leading: const Icon(Icons.my_location_rounded),
             title: Text(AppStrings.of(context, 'useCurrentLocation')),
             onTap: () => Navigator.of(context).pop(const UseGpsLocation()),
           ),
@@ -138,7 +138,7 @@ class _CitySearchScreenState extends State<CitySearchScreen> {
       itemBuilder: (context, index) {
         final result = _results[index];
         return ListTile(
-          leading: const Icon(Icons.place_outlined),
+          leading: const Icon(Icons.place_rounded),
           title: Text(result.displayName),
           onTap: () => Navigator.of(context).pop(result),
         );

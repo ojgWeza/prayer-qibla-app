@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fixed part of the Qibla compass: outer ring + the fixed true-north red
+     dot. Never rotates — see DESIGN_RULES.md "Qibla needle" section. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="140dp"
+    android:height="140dp"
+    android:viewportWidth="220"
+    android:viewportHeight="220">
+    <path
+        android:pathData="M110,14 A96,96 0 1,1 109.99,14"
+        android:strokeColor="#F5EAD8"
+        android:strokeAlpha="0.35"
+        android:strokeWidth="8"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M114,18 A4,4 0 1,1 113.99,18 Z"
+        android:fillColor="#E0473E" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Shows the next prayer time</string>
+    <string name="widget_default_header">Prayers</string>
+    <string name="widget_default_prayer">—</string>
+    <string name="widget_default_time">--:--</string>
+</resources>

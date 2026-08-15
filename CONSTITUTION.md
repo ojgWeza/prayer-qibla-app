@@ -19,10 +19,22 @@ Audience: Egypt/Arab world first, global (Arabic/English) second.
 1. **Everything runs with no backend of our own.** Prayer times and qibla are computed
    on-device (`adhan_dart`). The one exception is manual city search, which calls the
    free Nominatim (OpenStreetMap) API — once per search, not a recurring dependency.
-2. **No local Android SDK on the dev machine.** Builds happen entirely on
-   **GitHub Actions** (`.github/workflows/build.yml`) — a deliberate choice to avoid
-   multi-GB local installs. Only the Flutter SDK is local (`D:\dev\flutter`), for
-   `flutter analyze` / `flutter test` / editing.
+2. **Building the app locally still doesn't work — but running a pre-built APK locally
+   now does.** Builds (compiling) happen entirely on **GitHub Actions**
+   (`.github/workflows/build.yml`) — Gradle/NDK/Kotlin on this machine are a confirmed
+   dead end (see "Local device testing" below). The Flutter SDK is local at
+   `D:\dev\flutter\bin` (also `D:\dev\platform-tools\adb.exe`) — **neither is on PATH**,
+   but both exist and work when invoked by full path
+   (`"D:\dev\flutter\bin\flutter.bat" analyze`, etc.). **Don't report "flutter isn't
+   available"/"can't verify the build" from a bare `flutter` PATH lookup failing** —
+   check `grep -i flutter CONSTITUTION.md` or just try the full path first; a real APK
+   can still be produced by pushing + dispatching the CI workflow
+   (`gh workflow run build.yml --ref <branch>`, `gh run watch <id> --exit-status`) and
+   pulling the artifact down (`gh run download <id> -n app-debug`) to install via
+   `adb install`. As of 2026-08-15 there is also a **local Android SDK + emulator**
+   (separate from the build toolchain, see "Local Android emulator" below) at
+   `D:\dev\android-sdk` for running that already-built APK without a physical device —
+   still blocked on one one-time Windows setting as of this writing.
 3. **Every change must pass, before it's pushed:**
    - `flutter analyze` (must say "No issues found")
    - `dart run custom_lint` (the `impeccable_flutter_lints` check for "AI-slop" UI
@@ -69,6 +81,8 @@ lib/
                                  hand-rolled Gregorian names to avoid intl locale init)
     prefs_service.dart        — all local persistence (SharedPreferences)
     ad_service.dart           — AdMob init
+    widget_service.dart       — pushes the rolling prayer schedule to the Android
+                                 home screen widget (see below)
   screens/
     home_shell.dart           — owns all shared state, passes it down as props
     prayer_times_screen.dart  — includes the Hijri/Gregorian date header
@@ -84,6 +98,18 @@ lib/
                                 two-tone needle — replaces a bare Icons.navigation
 ```
 
+**Android home screen widget** (added 2026-08-06): a native `NextPrayerWidgetProvider`
+(`android/app/src/main/kotlin/.../NextPrayerWidgetProvider.kt`, extends the `home_widget`
+plugin's `HomeWidgetProvider`) plus `next_prayer_widget.xml` / `next_prayer_widget_info.xml`
+/ `widget_background.xml` under `android/app/src/main/res/`. It is intentionally
+Flutter-engine-independent: `widget_service.dart` pushes the whole rolling schedule
+(today + several days ahead, mirroring the notification window) as JSON whenever
+`home_shell.dart` recomputes prayer times; the native provider's job is only to find
+the first entry whose timestamp hasn't passed yet and render it, so Android's own
+periodic `updatePeriodMillis` refresh keeps the widget honest even when the app isn't
+opened. The widget reuses `@drawable/ic_launcher_foreground` (the generated seal motif)
+at low opacity as a background watermark rather than any new art asset.
+
 `home_shell.dart` is the single source of truth for state (location, prayer times,
 settings). No external state management library (Provider/Riverpod/Bloc) — the app isn't
 big enough to justify one yet.
@@ -98,6 +124,15 @@ source image; don't hand-edit the generated `android/app/src/main/res/mipmap-*` 
 **Design mockup:** there is a separate static HTML artifact used to iterate on visual
 design before touching Flutter code. It is NOT wired to the real app and can drift out
 of sync — see "Learnt lessons" below on how badly that drift can confuse feedback.
+
+**Design reference assets (`design/`) are gitignored, not committed.** The Organic
+design handoff (`design/Prayer times app design.zip` + its extracted
+`design_handoff_prayer_qibla_app/`) and the approved Claude-Design screenshots
+(`design/ScreenShots/*.png`) that this session's redesign (2026-08-07) was built
+against live under `design/`, which `.gitignore` excludes (line ~46, pre-existing rule,
+not added this session). **These files will NOT be present on a fresh clone** — if a
+future session needs to re-check something against the original design source, ask the
+user to re-supply `design/` rather than assuming it's still there.
 
 ## 4. Learnt lessons
 
@@ -148,6 +183,99 @@ session doesn't pay the same cost.
   operate on the underlying instant regardless of the `isUtc` flag — only on-screen
   digits were ever wrong, not next-prayer detection or notification scheduling.
 
+### Android home screen widgets (RemoteViews)
+- **A `TextView` whose width is expanded via `layout_weight` will right-align Arabic
+  text inside that expanded box**, even though the box itself sits on the left in an
+  LTR layout — Android's per-TextView `textDirection` auto-detects RTL script content
+  independently of the parent `layoutDirection`. The visible symptom: a big dead gap
+  on one side that gets worse the more the widget is resized, with text clumped
+  against whatever's next to it. Root-caused by actually looking at a screenshot from
+  the device, not by reading the XML. Fix: don't use `layout_weight` to expand a text
+  box that might hold bilingual content — use `wrap_content` and center the whole
+  block (`android:gravity="center"` on the parent) instead of stretching one piece of
+  it.
+- **Mock up a widget redesign as an HTML/image preview before touching the real XML
+  and burning another CI-build-plus-device-install cycle** — the user explicitly asked
+  for this after the first fix still didn't look right live. A `mcp__visualize`
+  preview using the actual brand hex colors (not a claude.ai theme) is close enough to
+  align on layout/art direction before spending the ~5-10 minute real round-trip.
+- Reuse `@drawable/ic_launcher_foreground` (the generated seal-motif PNG, already
+  exists per-density from `flutter_launcher_icons`) for decorative watermarks instead
+  of hand-authoring new vector art — same principle as the in-app `star_watermark.dart`
+  treatment, just via a plain low-`android:alpha` `ImageView` in a `FrameLayout` this
+  time since RemoteViews can't run a `CustomPainter`.
+- `RemoteViews` only supports a limited set of layout/view classes (`FrameLayout`,
+  `LinearLayout`, `RelativeLayout`, `GridLayout` as containers;
+  `TextView`/`ImageView`/`Button`/etc. as leaves) — but static XML attributes like
+  `android:alpha`, `android:scaleType`, and negative `layout_marginEnd` are all honored
+  at inflate time with zero extra Kotlin code, since they're baked into the layout
+  resource rather than being a per-update `RemoteViews.setXxx(...)` reflective call.
+- **A launcher grants widget space in whole grid cells — you cannot get a box smaller
+  than one row/column, no matter how small `minWidth`/`minHeight` is declared.** A
+  90dp `minHeight` still rounded up to a much taller box on MIUI. This invalidated an
+  earlier plan to fix "box looks huge vs. tiny text" by shipping a second, smaller
+  "compact" `AppWidgetProvider` variant — a compact variant would still occupy the
+  same one-row minimum, so it wouldn't actually shrink anything. The real fix is
+  scaling the *content* (text/icon/padding) up to fill the row the host already
+  grants, not trying to shrink the box below the host's grid quantum.
+- **`android:supportsRtl="true"` in the manifest did NOT make this widget's
+  `LinearLayout` child order mirror for Arabic**, even though the rest of the app's
+  Flutter UI and the phone's own system chrome were confirmed rendering RTL. An icon
+  written as the first child, expecting it to visually land on the right (the
+  "start" side) for Arabic, rendered on the left instead — plain unmirrored LTR
+  order. **Root cause confirmed (2026-08-06)**: `RemoteViews` are inflated by the
+  **launcher's own process**, which resolves RTL from the device's *system* locale
+  configuration — not from the widget-owning app's manifest, and critically not from
+  this app's own in-app language override (`PrefsService`, a toggle independent of
+  system locale, e.g. the phone can be system-English while the app is set to
+  Arabic). `supportsRtl` alone can never mirror a widget for an app-internal
+  language choice that doesn't match system locale. **Fix**: don't rely on automatic
+  mirroring at all — push the app's actual `language` value from Dart
+  (`widget_service.dart`) into the widget data, give the root layout an
+  `android:id`, and set it explicitly in the provider:
+  `views.setInt(R.id.widget_root, "setLayoutDirection", View.LAYOUT_DIRECTION_RTL /
+  _LTR)` (`RemoteViews.setInt` reflectively calls any single-int setter, and
+  `View.setLayoutDirection(int)` exists since API 17). This tracks the app's actual
+  language choice rather than system config or a hardcoded child order, so it stays
+  correct if the user switches language. Implemented in
+  `NextPrayerWidgetProvider.kt` + `next_prayer_widget.xml` (commit `a200aa5`) — not
+  yet live-verified (see TODO.md, blocked by a GitHub Actions outage the same
+  session this landed).
+- **An XML comment containing a literal `--` anywhere in its body (not just as
+  delimiters) fails AAPT resource parsing with a hard, whole-build-failing error**
+  (`The string "--" is not permitted within comments`) — caught this twice in one
+  session (once using `--` as an em-dash substitute, once again in a *different* file
+  right after fixing the first). `flutter analyze`/`custom_lint`/`flutter test` don't
+  catch this at all since it's Android resource XML, not Dart — it only surfaces
+  ~3 minutes into a CI Gradle build. Before pushing any change that touches Android
+  resource XML comments, grep for `--` inside `<!-- -->` bodies specifically (a plain
+  `--` search flags the legitimate `<!--`/`-->` delimiters too, so check what's
+  *between* them) rather than relying on CI to catch it.
+- **`google_fonts` (the Flutter package) does not help a native `RemoteViews` widget
+  at all** — it downloads/caches fonts at Flutter-engine runtime, which a widget
+  inflated by the launcher process never goes through. To get Caprasimo/Figtree text
+  in `next_prayer_widget.xml`, the actual open-source (OFL) `.ttf` files were fetched
+  directly from `google/fonts` on GitHub and committed under
+  `android/app/src/main/res/font/`, referenced via plain `android:fontFamily="@font/..."`.
+  Only fetched the variable-weight regular instances (no separate static bold/semibold
+  files exist for Figtree upstream) — bold-looking text uses `android:textStyle="bold"`
+  for Android's synthetic bold instead, which is fine since it's still the same
+  typeface family, not a substitution.
+- **A `RemoteViews.setFloat(id, "setRotation", degrees)` call rotates an `ImageView`
+  around its own view center** — used this to rotate just the Qibla-needle drawable at
+  runtime (pushed from `qibla_bearing_degrees` in `widget_service.dart`) while a
+  separate, non-rotating `ImageView` underneath renders the fixed ring + red north dot.
+  Needs the rotating and fixed `ImageView`s to be the exact same size and positioned
+  identically (e.g. both `layout_gravity="center"` in the same `FrameLayout`) so the
+  rotation pivot lines up with the fixed layer's center.
+- **This widget's Qibla needle is intentionally static** (points at the Qibla bearing
+  relative to true north, not relative to live device heading) — a home-screen widget
+  has no continuous compass-sensor feed the way the in-app Qibla screen does (that
+  would need a foreground service polling the magnetometer, which isn't worth the
+  battery cost for a home-screen widget). The user's first reaction on seeing this live
+  was that it "shouldn't be" static — flagged in TODO.md as a still-open discussion,
+  not silently assumed settled.
+
 ### Local device testing (no Android Studio on this machine)
 - `adb` was installed standalone — just the `platform-tools` zip from
   `dl.google.com/android/repository/platform-tools-latest-windows.zip` (~8MB), not the
@@ -175,6 +303,161 @@ session doesn't pay the same cost.
   asked for a real device instead. It's also a dead end for this project regardless of
   preference: Claude's browser-automation file upload caps at 10MB, and both the debug
   and release APKs are far larger.
+- **The "fresh ephemeral debug keystore per CI run" issue (see above) applies to DEBUG
+  builds too, not just release** — confirmed empirically 2026-08-06: two back-to-back
+  `workflow_dispatch` builds of the same feature branch, both debug-only, still
+  produced mismatched signatures. `adb install` on top of an existing install from a
+  different CI run reliably fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`; always
+  `adb uninstall <package>` first when installing a fresh CI artifact, even for debug.
+  Uninstalling wipes app data, which also removes any placed home screen widget and
+  the `home_widget` SharedPreferences data behind it — the app has to be reopened once
+  after every reinstall before a widget will show real data again.
+- **Check `adb shell dumpsys window | grep mCurrentFocus` before taking a screenshot
+  of a real, shared physical device — especially right after a wake/unlock/launch
+  sequence.** A blind screenshot once caught the user's private WhatsApp conversation
+  instead of the app, because the phone was in concurrent personal use and a `monkey`
+  launch intent didn't win the foreground race before the screenshot fired. Confirm
+  the target app actually owns focus first; if it doesn't, don't screenshot, and ask
+  whether the device is free to keep automating against.
+- **`LocationState` needs a real "not yet determined" value, not just reuse of
+  `denied` as the initial field default.** `PrayerTimesScreen`/`QiblaScreen` treat
+  `denied`/`deniedForever`/`serviceDisabled` as "show the permission-error UI" — if
+  the state field starts at `denied` before bootstrap has actually checked anything,
+  that error screen flashes during any slow work bootstrap does first (here: an
+  awaited notification-permission request), even though the real location logic
+  hasn't run yet. Fixed by adding `LocationState.unknown` as the true initial value,
+  which falls through to the existing loading-spinner branch instead. Caught live by
+  the user, not by static review.
+- **`adb` commands run from this project's Bash tool (git-bash/MSYS) mangle any
+  argument that starts with a single `/`** — including the remote device path in
+  `adb push <local> /sdcard/...` or `adb shell <cmd> /sdcard/...` — silently rewriting
+  it into a Windows path (e.g. `/sdcard/Download` → `C:/Program Files/Git/sdcard/Download`)
+  before it ever reaches adb. The command can appear to fail loudly (`ls: C:/Program:
+  No such file or directory`) or, worse, appear to succeed with a plausible byte count
+  while writing nowhere useful — always verify with a second `ls`. Fix: prefix the
+  *remote* path only with an extra leading slash (`//sdcard/Download/...`) to defeat
+  the MSYS conversion for that one argument. Don't reach for
+  `MSYS_NO_PATHCONV=1` globally — that also disables conversion of the *local* file
+  path argument, which then fails to resolve instead.
+- **Wireless-adb pairing code/port shown in Settings → Developer options → Wireless
+  debugging changes every time that screen is freshly opened** — can't be reused
+  across sessions. Flow each time: `adb pair <pairing-ip:pairing-port> <code>` (the
+  code + port shown under "Pair device with pairing code"), then separately
+  `adb connect <connect-ip:connect-port>` (a *different* port, shown on the main
+  Wireless debugging screen itself). Confirmed working 2026-08-10.
+- **Confirmed (again, more thoroughly this time, 2026-08-10): don't attempt local
+  `flutter build apk` on this machine — go straight to CI.** Tried anyway this
+  session before remembering the note above already covers it, and hit a full chain
+  of environment problems beyond just the NDK-license gate already documented:
+  JDK 11 (the PATH default) is too old for Gradle, needs `JAVA_HOME` pointed at
+  `C:\Program Files\Android\openjdk\jdk-21.0.8`; SDK/NDK licenses need manually
+  created `D:\dev\licenses\android-sdk-license`/`android-sdk-preview-license` files
+  (no `sdkmanager` binary present to run `--licenses` properly); the auto-installed
+  "Android SDK Platform 37.0" writes `AndroidVersion.ApiLevel=37.0` (with a decimal)
+  into its `source.properties`, which doesn't match Gradle's `android-37` target
+  hash lookup and needs a manually duplicated+patched `android-37` platform
+  directory; and finally a **reproducible Windows-only Kotlin compiler bug** —
+  "Build Tools API" in-process compilation throws `Could not close incremental
+  caches`/`storage already registered` across 4-5 plugin modules'
+  `compileDebugKotlin` tasks, reproduced identically through a Gradle daemon
+  restart and with `org.gradle.parallel=false`, never actually solved. Abandoned in
+  favor of `gh run download` against the already-green CI build + `adb install` —
+  this is the reliable path, don't burn time on local Android builds again.
+- **`adb exec-out screencap -p > file.png` works great as a live remote-diagnosis
+  tool** — used this session to empirically test the qibla compass's rotation
+  direction by capturing before/after screenshots around a user-performed physical
+  phone rotation, instead of guessing at trig sign conventions from source alone
+  (which had already gone wrong twice in prior sessions). Confirmed the rotation
+  *direction* was mathematically correct via a controlled 90°-turn test; a separate
+  absolute-direction test (comparing against another compass app) was contaminated
+  by the physical disturbance of switching apps, and then by the phone lying flat on
+  a table (magnetometer tilt-compensation is known to be unreliable when a phone is
+  horizontal rather than held upright) — neither confirmed a real bug. **Lesson: for
+  this kind of live sensor-dependent bug, get the user to hold the phone upright and
+  stay within the one app being tested, one variable change at a time** — cross-app
+  and flat-on-table comparisons both turned out to be red herrings that cost a lot of
+  back-and-forth before being recognized as confounds rather than code bugs.
+
+### Local Android emulator (device-free testing) — set up 2026-08-15
+- **Compiling the app locally and *running* an already-built APK locally are two
+  different toolchains — the first is broken here, the second isn't.** The abandoned
+  local-build attempt (see the "Confirmed (again...)" entry further down) needed
+  Gradle/NDK/Kotlin compilation, which hit a real, unresolved Windows-only bug. Running
+  a **CI-built** APK on a local emulator needs none of that — just SDK
+  `cmdline-tools` + `platform-tools` + `emulator` + one system image, all pure
+  downloads/unpacks, no compilation step at all.
+- Installed to `D:\dev\android-sdk` (kept off C:, which is low on space):
+  `cmdline-tools\latest` (from the official
+  `https://dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip`,
+  SHA-256 verified — **a WebFetch summary of the Android downloads page hallucinated a
+  wrong host, `edgedl.me.gvt1.com`, presenting it as extracted page content when it was
+  actually invented; always verify a checksum or re-derive the URL from the known
+  `dl.google.com/android/repository/...` pattern rather than trusting a fetched URL
+  at face value**), `platform-tools`, `emulator`, `platforms;android-34`, and
+  `system-images;android-34;google_apis;x86_64` (plain `google_apis`, not
+  `google_apis_playstore` — the Play Store variant blocks `adb install` of
+  non-Play-signed APKs on newer Android, which would defeat the point of installing a
+  CI-built debug APK).
+- **`sdkmanager` needs JDK 17+; the JDK 11 already on this machine (`C:\Program
+  Files\Microsoft\jdk-11.0.16.101-hotspot`) is too old and fails with "Java version 17
+  or higher is required."** A JDK 21 mentioned in an earlier session
+  (`D:\Program Files\Android\openjdk\jdk-21.0.8`) no longer exists on this machine —
+  don't assume it's still there. Fetched a fresh portable JDK 21 (Eclipse Temurin, via
+  Adoptium's stable API endpoint
+  `https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse`,
+  which redirects to the current build with no version number to guess) and unzipped
+  it to `D:\dev\jdk-21` — set `JAVA_HOME` to this path before running
+  `sdkmanager`/`avdmanager`.
+- **`avdmanager create avd -d <device-id-or-name>` fails with `Error: Could not load
+  devices from <system-image-dir>\devices.xml`, for every device profile tried
+  (name or numeric id), even though `avdmanager list device` itself works fine and
+  lists that same profile.** Looks like a bug/quirk in cmdline-tools 22.0's `-d`
+  handling — it tries to resolve the device skin from a `devices.xml` colocated with
+  the system image (which doesn't ship one) instead of falling back to the master
+  device list it already read successfully. **Fix: omit `-d` entirely** —
+  `avdmanager create avd -n <name> -k <system-image-package>` (no `-d`) creates the AVD
+  fine with a generic default hardware profile. Created AVD: `salaty_test`
+  (`D:\dev\android-sdk\avd\salaty_test.avd`), Android 14 (`google_apis`/x86_64).
+- **The emulator itself fails to boot with `x86_64 emulation currently requires
+  hardware acceleration!` / `Android Emulator hypervisor driver is not installed on
+  this machine`, even though the emulator's own preflight check confirms
+  `hasCompatibleHypervisor: Ok`** (the CPU/BIOS support virtualization fine — it's
+  specifically the Windows-side driver that's off). **Fix requires an elevated
+  PowerShell** (this session has no admin rights, confirmed via
+  `Get-WindowsOptionalFeature` itself throwing "requires elevation"):
+  `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart`,
+  then a full restart. **Not yet done as of 2026-08-15** — this is the one remaining
+  blocker before the emulator can actually boot; everything else (SDK, JDK, AVD) is
+  ready and doesn't need to be redone once this is turned on. Worth a heads-up if
+  VirtualBox/VMware are in active use — enabling this can conflict with them.
+- Once the emulator boots, drive it via the `mobile` MCP (see below) rather than
+  hand-typed `adb`/`emulator` commands where possible — same relationship
+  Claude-in-Chrome has to a real browser.
+
+### MCP servers (global, user-scope — set up 2026-08-15)
+- **`mobile`** (`claude-in-mobile`, `npx claude-in-mobile@latest`): drives a physical
+  Android device over ADB (the existing wireless-pairing flow below still applies —
+  this doesn't remove that step) **or a local emulator** once one exists. Screenshot,
+  tap/swipe/text input, UI-tree search, app install/launch, logs.
+- **`dart`** (the official Dart/Flutter MCP, registered by absolute path —
+  `D:\dev\flutter\bin\cache\dart-sdk\bin\dart.exe mcp-server`, since `dart`/`flutter`
+  aren't on this machine's PATH, same as everywhere else in this doc): code
+  analysis/fixing, widget-tree inspection, hot reload, and — most relevant here —
+  driving `flutter run -d web-server --dart-define=ENABLE_FLUTTER_DRIVER=true` for a
+  genuinely **device-free** verification path. **Real limitation, already hit by this
+  project before the MCP existed** (see "Flutter web can be used purely as a
+  verification tool" further down): `flutter_compass`, `google_mobile_ads`,
+  `home_widget`, and `flutter_local_notifications` have zero web implementation and are
+  already `kIsWeb`-guarded — the Qibla screen shows `compassUnavailable` in this mode,
+  and the widget/ads/notification pieces don't render at all. Web mode is only useful
+  for Prayer Times/Settings-screen-level layout and logic checks, not compass- or
+  widget-specific ones.
+- Both need a Claude Code session restart before their tools actually appear (MCP tool
+  lists load once at session start) — confirmed connected via `claude mcp list`, but
+  untested end-to-end as of this writing.
+- Considered and rejected: **MobileRun** (cloud-hosted real phones over HTTP) — no free
+  tier, $5-80/mo or $0.03/min pay-as-you-go, requires a signup + API key. Doesn't fit
+  "free."
 
 ### GitHub / gh CLI
 - If `git push` is rejected for touching `.github/workflows/*.yml` with "OAuth App...
@@ -185,6 +468,41 @@ session doesn't pay the same cost.
 - Downloading GitHub Actions artifacts requires being logged in. To hand someone a
   no-login direct download link, cut a **GitHub Release** and attach the APK as an
   asset (`gh release create ... path/to.apk`).
+- `gh` is installed on this machine at `C:\Program Files\GitHub CLI\gh.exe`, already
+  authenticated with the `workflow` scope — but it is **not on PATH** in this shell
+  session (bash *or* PowerShell both say "command not found"). Invoke it by full path
+  (`& "C:\Program Files\GitHub CLI\gh.exe" ...` in PowerShell, or the equivalent
+  `/c/Program Files/GitHub CLI/gh.exe` in bash) rather than assuming it's missing.
+- `build.yml`'s `push` trigger only fires for `master`/`main` — pushing a feature
+  branch alone does **not** start a CI build. To get a CI-built APK for a feature
+  branch without opening a PR (e.g. just to test on-device before merging), push the
+  branch then manually dispatch: `gh workflow run "Build APK" --ref <branch-name>`
+  (the workflow already declares `workflow_dispatch:`). Get the run ID from the
+  printed URL, then `gh run watch <id> --exit-status` to block until it finishes and
+  `gh run download <id> -D <dir>` to pull the artifact. Only the debug APK gets built
+  this way — the release APK step is gated to pushes on `master`/`main` specifically.
+- **Never try to extract the stored git/gh credential (e.g. `git credential fill`) to
+  build a raw API call** — this is correctly blocked by the auto-mode classifier. If
+  `gh` seems unavailable, look for it installed elsewhere (see above) before reaching
+  for credential extraction as a workaround.
+- **`gh workflow run` can return `HTTP 500` yet still have actually dispatched the
+  run** — caught 2026-08-06: a `500` on the first attempt looked like a clean
+  failure, so it was retried, but `gh run list` afterward showed *two* runs queued
+  within 3 seconds of each other. Check `gh run list --branch <branch> --limit 3`
+  before retrying a failed dispatch, to avoid burning a second CI run on a duplicate.
+- **GitHub Actions itself can have platform-wide outages** — check
+  `curl -s https://www.githubstatus.com/api/v2/status.json` if a dispatched run sits
+  in `queued` far longer than the usual ~7-10 min, or fails immediately with
+  `Service Unavailable` while resolving action downloads (as opposed to failing
+  inside an actual build step). Confirmed 2026-08-06: during one such "Minor Service
+  Outage" window, three straight `workflow_dispatch` runs against the same unchanged
+  commit all failed on pure infra grounds — one on `Service Unavailable` resolving
+  action downloads, one on `The job was not acquired by Runner of type hosted even
+  after multiple attempts` (sat `queued` 15+ min, never started), before a later
+  redispatch finally got a runner. Not our code/config when this happens — don't
+  start debugging the workflow file after just one or two failures during a known
+  outage window; keep re-dispatching (checking githubstatus.com between attempts)
+  until one actually gets a runner.
 
 ### External images / design assets
 - **Look at any candidate image yourself (Read tool) before using it.** A text-based
@@ -221,6 +539,27 @@ session doesn't pay the same cost.
   value, and directly caused a real layout bug (it overlapped the ad-slot). It was
   removed. One consistent placement (the app bar) is the signature; resist the urge to
   also scatter it as a second decorative flourish "for good measure."
+- **Launcher name/icon assets live outside the Dart tree and are easy to silently
+  leave stale through a whole redesign pass.** After the full Organic design-system
+  application (colors, fonts, in-app compass/watermark motif all updated across
+  several sessions), `android:label` was still the literal `prayer_qibla` Flutter
+  project placeholder, and `assets/icon/*.png` still had the pre-redesign teal
+  background and an outdated star-shape stand-in — nothing in the Dart-side work
+  ever touched either. Caught only because the user asked directly ("have you
+  included the new icon?") rather than assuming it. **When closing out a rebrand/
+  redesign pass, explicitly check `AndroidManifest.xml`'s `android:label`,
+  `assets/icon/`, and `flutter_launcher_icons.yaml`'s `adaptive_icon_background` —
+  don't assume a Flutter-side theme change covers them.**
+- **A one-off `flutter test`-based script is a good way to render deterministic PNG
+  assets (like an app icon) reusing the app's own `CustomPainter` drawing code**, when
+  no image-rasterization tool (ImageMagick, rsvg-convert, Python+Pillow) is available
+  in the environment — `dart:ui`'s `Canvas`/`PictureRecorder`/`Image.toByteData` only
+  works inside the Flutter test harness (or a running app), not plain `dart run`.
+  **Must wrap the encode/write calls in `tester.runAsync()`** — without it, the first
+  `toByteData()` call can slip through on leftover microtasks but a second one in the
+  same test hangs until the suite timeout, since `flutter_test`'s default fake-async
+  zone doesn't advance real time/microtasks for genuinely-async native work like image
+  codecs. Delete the script after use; it's a generator, not a regression test.
 
 ### Tooling notes (browser automation, image editing)
 - The in-session sandboxed Browser tool (`Claude_Browser`) has been non-functional
@@ -228,6 +567,44 @@ session doesn't pay the same cost.
   also can't reach authenticated pages like private Claude artifacts. For anything that
   needs a real logged-in session or actual visual verification, use **Claude in Chrome**
   (the user's real browser) instead — confirmed working, including screenshots.
+- **Update (2026-08-07): the sandboxed `Claude_Browser` tool DOES work now** for
+  screenshotting a locally-served page (via `preview_start`/`navigate`/`computer
+  screenshot`) — used successfully this session to verify the real (not mockup) app.
+  What still doesn't work reliably: **clicking inside a Flutter-web CanvasKit canvas**.
+  `computer left_click` against Flutter web's bottom `NavigationBar` tabs consistently
+  timed out (30s) across ~6 attempts in two different sessions/builds, never actually
+  switching tabs (confirmed via screenshot after each attempt) — a tooling limitation,
+  not an app bug. If a future session needs to click through multiple screens of the
+  live app, don't burn time retrying clicks; either verify via a `flutter test` widget
+  test instead (see the `debugCompassStreamOverride` pattern in `qibla_screen.dart` /
+  `test/qibla_screen_test.dart` for how to make a screen path testable without a real
+  device/sensor), or fall back to a real Android emulator/device.
+- **Flutter web can be used purely as a verification tool for the real app's actual
+  rendering — do this instead of trusting a hand-maintained HTML mockup, which *will*
+  drift from the real Dart code no matter how carefully it's kept in sync.** Added via
+  `flutter create . --platforms=web` (creates a `web/` directory + lets
+  `.claude/launch.json` run `flutter run -d chrome`). **This app still ships
+  Android-only** — web is not a target platform, purely a local screenshot rig. Needed
+  `kIsWeb` guards around every call into a mobile-only plugin
+  (`google_mobile_ads`/`home_widget`/`flutter_local_notifications`/`flutter_timezone`
+  all have zero web implementation and throw `MissingPluginException` before `runApp()`
+  ever renders anything, leaving a blank white page) — see `ad_service.dart`,
+  `banner_ad_widget.dart`, `widget_service.dart`, `notification_service.dart`,
+  `main.dart`. This paid off immediately: running the real app surfaced two real bugs
+  invisible from reading source (oversized/blurry star watermark; Arabic text silently
+  falling back to the wrong font because Caprasimo has no Arabic glyphs) and one real
+  Dart logic bug unrelated to web at all (`QiblaScreen` spinning forever if the compass
+  stream never emits — genuinely also possible on a real Android device with no
+  magnetometer, not just on web).
+- **A `flutter run -d chrome` dev-server build is slow and flaky to script against**:
+  the "Waiting for connection from debug service on Chrome" handshake regularly took
+  45-90s, and repeated `navigate()` calls before that handshake finished caused
+  `WebSocketConnectionClosed`/`MissingPluginException` noise in the console that looked
+  like real bugs but wasn't. Always fully `preview_stop` + `preview_start` fresh
+  (don't just re-`navigate()` an existing tab) after a Dart source change — there's no
+  reliable hot-reload trigger available through these tools — and then wait for
+  `main.dart.js` to 200 *and* give it another several seconds beyond that before the
+  first screenshot.
 - Claude-in-Chrome's `file_upload` tool caps combined upload size at **10MB** — both
   this app's debug (~150MB+) and release (~55-60MB) APKs are far over that, so it can
   never be used to push an APK into a browser-based tool (e.g. Appetize.io). This is a
@@ -254,3 +631,23 @@ session doesn't pay the same cost.
   `home_shell.dart` fires all 5 notifiable prayers unconditionally
   (`isEnabled: (weekday, prayer) => true`); there is currently no per-prayer/per-day
   muting at all until the redesign lands.
+- **`applicationId` is finalized (2026-08-06): staying on `com.hgdroid.prayer_qibla`,
+  no rename.** Explicitly confirmed with the user, since this can never change again
+  after the first Play Store upload. Don't revisit this without a strong new reason —
+  a change now would mean starting over as a brand-new Play Store listing.
+- **First-ever app launch defaults to Cairo, Egypt (2026-08-06), not a live GPS
+  prompt.** Confirmed bad UX live on the Mi 10: a fresh install blocked on a full GPS
+  permission flow with nothing but a blank screen until it resolved. Decided
+  approach, in order of precedence in `home_shell.dart`'s `_bootstrap()`: (1) a saved
+  manual location always wins, (2) otherwise a cached GPS fix (`PrefsService`) is
+  used instantly while a fresh fix refreshes in the background, (3) otherwise —
+  meaning no location has ever been resolved or picked at all — default to Cairo
+  (`_defaultLatitude`/`_defaultLongitude` constants) with **no automatic GPS
+  prompt**. The user opts into GPS or a specific city explicitly via the existing
+  location picker (`CitySearchScreen`, tap the app bar location chip). Don't revert
+  to auto-requesting GPS on first launch without asking again.
+- **AdMob real IDs, the release signing keystore, and re-enabling R8 minification are
+  all deliberately still open/undecided** as of 2026-08-06 — each was asked about
+  individually and none were confirmed (the AskUserQuestion prompts were dismissed or
+  the user redirected to something else first). Don't assume a default for any of
+  these three; ask again before acting on them.

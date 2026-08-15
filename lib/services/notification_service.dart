@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -12,6 +13,10 @@ class NotificationService {
   bool _initialized = false;
 
   Future<void> init() async {
+    // flutter_local_notifications/flutter_timezone have no web
+    // implementation -- this app is Android-only in production; skip on
+    // web instead of blocking bootstrap on a missing platform channel.
+    if (kIsWeb) return;
     if (_initialized) return;
     tz_data.initializeTimeZones();
     final localTimezone = await FlutterTimezone.getLocalTimezone();
@@ -29,13 +34,17 @@ class NotificationService {
   }
 
   Future<void> requestPermission() async {
+    if (kIsWeb) return;
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
 
-  Future<void> cancelAll() => _plugin.cancelAll();
+  Future<void> cancelAll() {
+    if (kIsWeb) return Future.value();
+    return _plugin.cancelAll();
+  }
 
   /// Schedules prayer notifications for a rolling window of days (today
   /// plus however many are passed in [upcomingDays]), skipping any prayer
@@ -52,6 +61,7 @@ class NotificationService {
     required bool Function(int weekday, String prayerKey) isEnabled,
     required String Function(String prayerKey) labelFor,
   }) async {
+    if (kIsWeb) return;
     await cancelAll();
     final now = tz.TZDateTime.now(tz.local);
 
