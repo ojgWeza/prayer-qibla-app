@@ -19,19 +19,22 @@ Audience: Egypt/Arab world first, global (Arabic/English) second.
 1. **Everything runs with no backend of our own.** Prayer times and qibla are computed
    on-device (`adhan_dart`). The one exception is manual city search, which calls the
    free Nominatim (OpenStreetMap) API — once per search, not a recurring dependency.
-2. **No local Android SDK on the dev machine.** Builds happen entirely on
-   **GitHub Actions** (`.github/workflows/build.yml`) — a deliberate choice to avoid
-   multi-GB local installs. Only the Flutter SDK is local, at `D:\dev\flutter\bin`
-   (also `D:\dev\platform-tools\adb.exe`) — **neither is on PATH**, but both exist and
-   work when invoked by full path (`"D:\dev\flutter\bin\flutter.bat" analyze`, etc.).
-   **Don't report "flutter isn't available"/"can't verify the build" from a bare
-   `flutter` PATH lookup failing** — check `grep -i flutter CONSTITUTION.md` or just
-   try the full path first; a real APK can still be produced by pushing + dispatching
-   the CI workflow (`gh workflow run build.yml --ref <branch>`,
-   `gh run watch <id> --exit-status`) and pulling the artifact down
-   (`gh run download <id> -n app-debug`) to install via `adb install` for live,
-   on-device verification — this whole loop is available locally, it just isn't a
-   single `flutter build apk` command.
+2. **Building the app locally still doesn't work — but running a pre-built APK locally
+   now does.** Builds (compiling) happen entirely on **GitHub Actions**
+   (`.github/workflows/build.yml`) — Gradle/NDK/Kotlin on this machine are a confirmed
+   dead end (see "Local device testing" below). The Flutter SDK is local at
+   `D:\dev\flutter\bin` (also `D:\dev\platform-tools\adb.exe`) — **neither is on PATH**,
+   but both exist and work when invoked by full path
+   (`"D:\dev\flutter\bin\flutter.bat" analyze`, etc.). **Don't report "flutter isn't
+   available"/"can't verify the build" from a bare `flutter` PATH lookup failing** —
+   check `grep -i flutter CONSTITUTION.md` or just try the full path first; a real APK
+   can still be produced by pushing + dispatching the CI workflow
+   (`gh workflow run build.yml --ref <branch>`, `gh run watch <id> --exit-status`) and
+   pulling the artifact down (`gh run download <id> -n app-debug`) to install via
+   `adb install`. As of 2026-08-15 there is also a **local Android SDK + emulator**
+   (separate from the build toolchain, see "Local Android emulator" below) at
+   `D:\dev\android-sdk` for running that already-built APK without a physical device —
+   still blocked on one one-time Windows setting as of this writing.
 3. **Every change must pass, before it's pushed:**
    - `flutter analyze` (must say "No issues found")
    - `dart run custom_lint` (the `impeccable_flutter_lints` check for "AI-slop" UI
@@ -374,6 +377,87 @@ session doesn't pay the same cost.
   stay within the one app being tested, one variable change at a time** — cross-app
   and flat-on-table comparisons both turned out to be red herrings that cost a lot of
   back-and-forth before being recognized as confounds rather than code bugs.
+
+### Local Android emulator (device-free testing) — set up 2026-08-15
+- **Compiling the app locally and *running* an already-built APK locally are two
+  different toolchains — the first is broken here, the second isn't.** The abandoned
+  local-build attempt (see the "Confirmed (again...)" entry further down) needed
+  Gradle/NDK/Kotlin compilation, which hit a real, unresolved Windows-only bug. Running
+  a **CI-built** APK on a local emulator needs none of that — just SDK
+  `cmdline-tools` + `platform-tools` + `emulator` + one system image, all pure
+  downloads/unpacks, no compilation step at all.
+- Installed to `D:\dev\android-sdk` (kept off C:, which is low on space):
+  `cmdline-tools\latest` (from the official
+  `https://dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip`,
+  SHA-256 verified — **a WebFetch summary of the Android downloads page hallucinated a
+  wrong host, `edgedl.me.gvt1.com`, presenting it as extracted page content when it was
+  actually invented; always verify a checksum or re-derive the URL from the known
+  `dl.google.com/android/repository/...` pattern rather than trusting a fetched URL
+  at face value**), `platform-tools`, `emulator`, `platforms;android-34`, and
+  `system-images;android-34;google_apis;x86_64` (plain `google_apis`, not
+  `google_apis_playstore` — the Play Store variant blocks `adb install` of
+  non-Play-signed APKs on newer Android, which would defeat the point of installing a
+  CI-built debug APK).
+- **`sdkmanager` needs JDK 17+; the JDK 11 already on this machine (`C:\Program
+  Files\Microsoft\jdk-11.0.16.101-hotspot`) is too old and fails with "Java version 17
+  or higher is required."** A JDK 21 mentioned in an earlier session
+  (`D:\Program Files\Android\openjdk\jdk-21.0.8`) no longer exists on this machine —
+  don't assume it's still there. Fetched a fresh portable JDK 21 (Eclipse Temurin, via
+  Adoptium's stable API endpoint
+  `https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse`,
+  which redirects to the current build with no version number to guess) and unzipped
+  it to `D:\dev\jdk-21` — set `JAVA_HOME` to this path before running
+  `sdkmanager`/`avdmanager`.
+- **`avdmanager create avd -d <device-id-or-name>` fails with `Error: Could not load
+  devices from <system-image-dir>\devices.xml`, for every device profile tried
+  (name or numeric id), even though `avdmanager list device` itself works fine and
+  lists that same profile.** Looks like a bug/quirk in cmdline-tools 22.0's `-d`
+  handling — it tries to resolve the device skin from a `devices.xml` colocated with
+  the system image (which doesn't ship one) instead of falling back to the master
+  device list it already read successfully. **Fix: omit `-d` entirely** —
+  `avdmanager create avd -n <name> -k <system-image-package>` (no `-d`) creates the AVD
+  fine with a generic default hardware profile. Created AVD: `salaty_test`
+  (`D:\dev\android-sdk\avd\salaty_test.avd`), Android 14 (`google_apis`/x86_64).
+- **The emulator itself fails to boot with `x86_64 emulation currently requires
+  hardware acceleration!` / `Android Emulator hypervisor driver is not installed on
+  this machine`, even though the emulator's own preflight check confirms
+  `hasCompatibleHypervisor: Ok`** (the CPU/BIOS support virtualization fine — it's
+  specifically the Windows-side driver that's off). **Fix requires an elevated
+  PowerShell** (this session has no admin rights, confirmed via
+  `Get-WindowsOptionalFeature` itself throwing "requires elevation"):
+  `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart`,
+  then a full restart. **Not yet done as of 2026-08-15** — this is the one remaining
+  blocker before the emulator can actually boot; everything else (SDK, JDK, AVD) is
+  ready and doesn't need to be redone once this is turned on. Worth a heads-up if
+  VirtualBox/VMware are in active use — enabling this can conflict with them.
+- Once the emulator boots, drive it via the `mobile` MCP (see below) rather than
+  hand-typed `adb`/`emulator` commands where possible — same relationship
+  Claude-in-Chrome has to a real browser.
+
+### MCP servers (global, user-scope — set up 2026-08-15)
+- **`mobile`** (`claude-in-mobile`, `npx claude-in-mobile@latest`): drives a physical
+  Android device over ADB (the existing wireless-pairing flow below still applies —
+  this doesn't remove that step) **or a local emulator** once one exists. Screenshot,
+  tap/swipe/text input, UI-tree search, app install/launch, logs.
+- **`dart`** (the official Dart/Flutter MCP, registered by absolute path —
+  `D:\dev\flutter\bin\cache\dart-sdk\bin\dart.exe mcp-server`, since `dart`/`flutter`
+  aren't on this machine's PATH, same as everywhere else in this doc): code
+  analysis/fixing, widget-tree inspection, hot reload, and — most relevant here —
+  driving `flutter run -d web-server --dart-define=ENABLE_FLUTTER_DRIVER=true` for a
+  genuinely **device-free** verification path. **Real limitation, already hit by this
+  project before the MCP existed** (see "Flutter web can be used purely as a
+  verification tool" further down): `flutter_compass`, `google_mobile_ads`,
+  `home_widget`, and `flutter_local_notifications` have zero web implementation and are
+  already `kIsWeb`-guarded — the Qibla screen shows `compassUnavailable` in this mode,
+  and the widget/ads/notification pieces don't render at all. Web mode is only useful
+  for Prayer Times/Settings-screen-level layout and logic checks, not compass- or
+  widget-specific ones.
+- Both need a Claude Code session restart before their tools actually appear (MCP tool
+  lists load once at session start) — confirmed connected via `claude mcp list`, but
+  untested end-to-end as of this writing.
+- Considered and rejected: **MobileRun** (cloud-hosted real phones over HTTP) — no free
+  tier, $5-80/mo or $0.03/min pay-as-you-go, requires a signup + API key. Doesn't fit
+  "free."
 
 ### GitHub / gh CLI
 - If `git push` is rejected for touching `.github/workflows/*.yml` with "OAuth App...

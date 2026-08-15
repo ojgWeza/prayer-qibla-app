@@ -167,50 +167,100 @@ is done — move it into "Done" rather than leaving it ambiguous.
       `prayer_times_screen.dart`'s `_DateHeader` already renders. Added a matching
       `.date-header` block (Gregorian on top, Hijri muted below) to the Prayer Times
       screen mock, republished to the same Artifact URL.
+- [x] **Design-taste audit + 4 fixes (2026-08-15)**, via a design-skill pass (Emil
+      Kowalski's `emil-design-eng` + Leonxlnx's `design-taste-frontend`/
+      `redesign-existing-projects`, both written for web/CSS and adapted for Flutter —
+      most of their checklist didn't apply, see `CONSTITUTION.md` if that adaptation
+      needs redoing later). Audit findings and rationale are in the session transcript,
+      not duplicated here — just the outcome:
+      - `_PrayerRow`'s next-prayer highlight (`prayer_times_screen.dart`) now
+        crossfades background/border/text color (`AnimatedContainer` +
+        `AnimatedDefaultTextStyle`, 200ms `Curves.easeOut`) instead of snapping when
+        the highlighted row changes (settings edit, or a prayer time passing while the
+        app is open). Card's `margin` moved to a wrapping `Padding` after
+        `custom_lint`'s `impeccable_layout_transition` correctly flagged it as a
+        layout property sitting directly on the `AnimatedContainer`.
+      - `qibla_compass.dart`'s `_alignController` (the resting↔"locked on Qibla" color
+        crossfade) now reads through a `CurvedAnimation(Curves.easeOut)` instead of
+        its raw linear value, matching the curve already used elsewhere in the same
+        widget.
+      - `main.dart`'s `MaterialApp` gained `themeAnimationCurve: Curves.easeInOut` —
+        the built-in 200ms theme-flip animation (the `afterMaghrib` auto dark-mode
+        transition) was already there via Flutter's default, just linear.
+      - 8 call sites across `home_shell.dart`, `settings_screen.dart`,
+        `notification_grid_screen.dart`, `prayer_times_screen.dart`, `qibla_screen.dart`,
+        `city_search_screen.dart` switched from mixed default/outlined Material icons
+        to a single `_rounded` family, matching the pill-shaped buttons/cards already
+        in the Organic system.
+      `flutter analyze` + `dart run custom_lint` + `flutter test` all green.
+      **Not yet live-verified** — needs either the new local emulator (blocked, see
+      below) or the Mi 10.
 
 ## In progress / needs attention right now 🔄
 
-**Start here next session** (2026-08-10 session end — see CONSTITUTION.md's session log
-for the full account; short version below):
+**Start here next session** (2026-08-15 session end):
 
-1. **⚠️ STILL NOT RESOLVED — highest priority. Live-diagnosed on-device this session
-   (2026-08-10) with a real, controlled protocol** (adb screenshots captured directly
-   off the Mi 10 via wireless adb while the user physically rotated the phone —
-   `adb exec-out screencap -p`, no manual photo needed). Two tests run:
-   - **Clean 90°-turn test** (stayed in Salaty the whole time, no app-switching):
-     baseline needle ~‑6° from up → after a stated 90° clockwise physical turn, needle
-     at ~‑58° from up, i.e. the needle rotated **~52° counterclockwise** for a **90°
-     clockwise** physical turn. That's the mathematically *correct* relative direction
-     for a device-relative bearing needle (opposite the housing's own rotation, like a
-     real compass card) — so the current sign
-     (`angle = (heading - qiblaBearing) * pi / 180` in `qibla_screen.dart`, from last
-     session's flip) is very likely NOT the bug. **Do not flip the sign again without
-     new evidence** — this was checked properly this time, unlike prior sessions.
-   - **Absolute-direction test against a second reference compass app**: contaminated
-     the first attempt (switching apps physically disturbs the phone's orientation in
-     hand) but a follow-up with the **phone lying flat on a table** (rotated to N=0° on
-     the reference app, then switched to Salaty without touching it) showed the needle
-     pointing at a fixed position that, per the user, corresponds to **true north**, not
-     the 136° Qibla bearing — i.e. the qibla offset appeared not to be applied at all in
-     that reading. However **the phone was lying flat on a table for this test**, and
-     magnetometer tilt-compensation is known to be unreliable/unstable when a phone is
-     horizontal rather than held upright — this is a very plausible confound, not
-     necessarily a code bug. Live in-app rotation tracking was separately confirmed
-     smooth/responsive (rules out a frozen/stale-sensor-stream theory).
-   - **Session ended mid-diagnosis**: asked the user to repeat the absolute-direction
-     test holding the phone upright (not flat on a table) — **answer not yet received**.
-   - **Next session: get that answer first**, before touching `qibla_screen.dart` again.
-     If upright-and-held gives a plausible southeast-ish "needle-up" direction, this
-     was a sensor/table artifact and the current code is correct as-is (close this
-     item). If it still points north/some other wrong fixed direction while held
-     upright, that's a real, reproducible bug — worth checking whether
-     `flutter_compass`'s `heading` on this device is actually magnetic vs. true north,
-     whether it's frozen at a stale value from an earlier resume, or whether
-     `qiblaBearing` itself is somehow reading as 0 inside `QiblaCompass` despite the
-     "136°" label showing correctly (re-verify `widget.qiblaBearing` is the exact same
-     value flowing into both the label `Text` and the `angle` calculation in
-     `qibla_screen.dart:123` — they use the same variable currently, but re-confirm
-     after any further edit).
+0. **Local device-free testing is now set up but blocked on one Windows setting.** A
+   local Android SDK + emulator now exists at `D:\dev\android-sdk` (AVD `salaty_test`,
+   Android 14/`google_apis`/x86_64) — this is separate from the still-broken local
+   *build* toolchain (Gradle/NDK/Kotlin, see `CONSTITUTION.md`), it only *runs* an
+   already CI-built APK, no compilation involved. It won't boot yet:
+   `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart`
+   needs to be run in an **elevated** PowerShell (this session has no admin rights),
+   then the machine restarted. Once that's done: boot the emulator
+   (`D:\dev\android-sdk\emulator\emulator.exe -avd salaty_test`), confirm `adb devices`
+   sees it, then use it (via the new `mobile` MCP, see next point) to verify this
+   session's 4 design fixes above without needing the Mi 10 for anything except the
+   compass/widget items that a home-screen widget/magnetometer genuinely require a
+   host OS for anyway.
+   Two new global MCPs were also added this session — **`mobile`** (drives ADB/an
+   emulator: screenshot, tap, UI tree, app install) and **`dart`** (official
+   Flutter MCP, can drive `flutter run -d web-server` for verification with literally
+   no device/emulator at all, but `flutter_compass`/`google_mobile_ads`/`home_widget`/
+   `flutter_local_notifications` have no web implementation so compass/widget/ads/
+   notifications won't render there). **Both need a Claude Code session restart**
+   before their tools are actually callable — confirmed connected via `claude mcp
+   list`, not yet used end-to-end.
+1. **Once a device (Mi 10 or the new emulator) is available, live-verify in this
+   order**: (a) this session's 4 design fixes above, (b) the still-open qibla
+   sign-flip/alignment-feedback re-verification (item 1 below — this has been pending
+   across multiple sessions now), (c) anything else still open below.
+
+*(Resolved, kept for history: the hookify `hooks.json` path-escaping bug and `gh` auth
+that a 2026-08-12 session was blocked on are both fixed/confirmed — `gh` has been used
+successfully throughout the 2026-08-15 session above. The commit/push/CI-build/
+`adb install`/live-verify plan that session was queued up on is now folded into item 1
+above, still pending.)*
+
+1. **Sign flipped back (2026-08-10), pending live re-verification.** Previous session's
+   90°-turn test (needle rotated ~52° counterclockwise for a 90° clockwise physical
+   turn) was **misread** as confirming `angle = heading - qiblaBearing` — that formula
+   actually predicts the needle rotating the *same* direction as the phone (clockwise),
+   which contradicts the observed counterclockwise rotation. The correct relationship
+   for an absolute-direction marker while the phone faces `heading` is
+   `screenAngle = qiblaBearing - heading` (turn phone clockwise → every absolute marker
+   swings counterclockwise on screen, like a real compass card) — this is what the
+   observed test result actually matches. Independently confirmed against a competitor
+   qibla app's rotating-ring compass, screenshotted on the same Mi 10: its
+   fixed-bearing marker visibly moved counterclockwise as the ring (driven by device
+   heading) rotated clockwise. Flipped `qibla_screen.dart:123` from
+   `(heading - qiblaBearing)` to `(qiblaBearing - heading)`. `flutter analyze` +
+   `flutter test test/qibla_screen_test.dart` both green. **Not yet live-verified on
+   the Mi 10** — next session, redo the 90°-turn test and the absolute-direction test
+   (phone held upright, not flat on a table — tilt compensation is unreliable
+   horizontal) to confirm this is actually the fix before closing this item. If it's
+   still wrong, suspect `flutter_compass`'s `heading` being magnetic vs. true north on
+   this device, or a stale/frozen sensor value, rather than the sign again.
+   **Also added (2026-08-10): "you're facing Qibla" alignment feedback**, which our
+   compass had none of before (the competitor screenshots' Kaaba icon turning blue was
+   the prompt). `qibla_screen.dart` now computes a normalized heading/bearing diff and
+   an `isAligned` bool (within a 5° threshold), fires `HapticFeedback.mediumImpact()`
+   once on the false→true edge (not every frame), and passes `isAligned` down to
+   `QiblaCompass`/`_CompassPainter` (`qibla_compass.dart`), which switches the needle
+   blade from its tail/tip gradient to a solid `accent700` fill plus recolors the
+   center hub ring/dot, when aligned. `flutter analyze` + `flutter test` (all 5, not
+   just the qibla one) green. **Not yet live-verified** — bundle this check in with the
+   sign-fix re-verification above (both live on the Mi 10, same session).
    - **Needle shape — separate complaint, not yet addressed.** User's exact words:
      "the bug shape you added to the needle... looks very bad" — screenshots this
      session show the tapered-blade + chevron construction from `qibla_compass.dart`

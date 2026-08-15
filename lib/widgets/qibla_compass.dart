@@ -9,11 +9,108 @@ import '../theme/app_theme.dart';
 /// and an asymmetric tapered-blade needle (sharp tip = Qibla, blunt rounded
 /// tail, trailing chevrons) so which end points at Qibla is unambiguous
 /// even when the needle isn't moving.
-class QiblaCompass extends StatelessWidget {
+class QiblaCompass extends StatefulWidget {
   final double angle;
   final String language;
 
-  const QiblaCompass({super.key, required this.angle, this.language = 'ar'});
+  /// True once the device heading is within the alignment threshold of the
+  /// qibla bearing -- mirrors a competitor app's Kaaba-icon-turns-blue cue so
+  /// the user gets a clear "you're pointing at Qibla now" signal instead of
+  /// having to eyeball a moving needle against a static label.
+  final bool isAligned;
+
+  const QiblaCompass({
+    super.key,
+    required this.angle,
+    this.language = 'ar',
+    this.isAligned = false,
+  });
+
+  @override
+  State<QiblaCompass> createState() => _QiblaCompassState();
+}
+
+class _QiblaCompassState extends State<QiblaCompass>
+    with TickerProviderStateMixin {
+  // Raw sensor headings jump discontinuously (both from magnetometer noise
+  // between events and from the 359->1 wraparound), which read as a jittery,
+  // teleporting needle. This controller chases the latest target angle over
+  // a short throw instead of snapping straight to it, so the needle reads as
+  // a physical compass card settling rather than a raw sensor readout.
+  late final AnimationController _headingController;
+  late Animation<double> _headingAnimation;
+  double _displayAngle = 0;
+
+  // Crossfades the needle/hub color between the resting and "locked on
+  // Qibla" palettes so the alignment cue reads as a transition, not a hard
+  // color snap.
+  late final AnimationController _alignController;
+  // Color/state transitions read best on an eased curve rather than the
+  // controller's raw linear value -- same easeOut used by _headingAnimation.
+  late final CurvedAnimation _alignAnimation;
+
+  // One-shot burst fired only on the false->true alignment edge -- the
+  // authored "you found Qibla" moment, synced with the haptic tap already
+  // fired by QiblaScreen on the same edge.
+  late final AnimationController _lockController;
+
+  bool get _reduceMotion =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayAngle = widget.angle;
+    _headingAnimation = AlwaysStoppedAnimation(_displayAngle);
+    _headingController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 180))
+          ..addListener(() => setState(() => _displayAngle = _headingAnimation.value));
+    _alignController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      value: widget.isAligned ? 1 : 0,
+    );
+    _alignAnimation = CurvedAnimation(parent: _alignController, curve: Curves.easeOut);
+    _lockController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
+  }
+
+  @override
+  void didUpdateWidget(covariant QiblaCompass oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final reduceMotion = _reduceMotion;
+
+    if (oldWidget.angle != widget.angle) {
+      final target = _displayAngle + _shortestAngleDelta(_displayAngle, widget.angle);
+      if (reduceMotion) {
+        _headingController.stop();
+        setState(() => _displayAngle = target);
+      } else {
+        _headingAnimation = Tween<double>(begin: _displayAngle, end: target)
+            .chain(CurveTween(curve: Curves.easeOut))
+            .animate(_headingController);
+        _headingController.forward(from: 0);
+      }
+    }
+
+    if (oldWidget.isAligned != widget.isAligned) {
+      if (reduceMotion) {
+        _alignController.value = widget.isAligned ? 1 : 0;
+      } else {
+        widget.isAligned ? _alignController.forward() : _alignController.reverse();
+        if (widget.isAligned) _lockController.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _headingController.dispose();
+    _alignAnimation.dispose();
+    _alignController.dispose();
+    _lockController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,16 +120,33 @@ class QiblaCompass extends StatelessWidget {
     return SizedBox(
       width: 240,
       height: 240,
-      child: CustomPaint(
-        painter: _CompassPainter(
-          angle: angle,
-          surface: theme.colorScheme.surface,
-          labelStyle: labelStyle,
-          useArabicLabels: language == 'ar',
-        ),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_alignController, _lockController]),
+        builder: (context, _) {
+          return CustomPaint(
+            painter: _CompassPainter(
+              angle: _displayAngle,
+              surface: theme.colorScheme.surface,
+              labelStyle: labelStyle,
+              useArabicLabels: widget.language == 'ar',
+              alignFraction: _alignAnimation.value,
+              lockProgress: _lockController.value,
+            ),
+          );
+        },
       ),
     );
   }
+}
+
+/// Signed shortest angular distance from [from] to [to] in radians, in
+/// (-pi, pi] -- so a heading crossing the 359/1 degree boundary turns the
+/// needle by ~2 degrees instead of spinning it almost a full circle.
+double _shortestAngleDelta(double from, double to) {
+  const twoPi = 2 * math.pi;
+  var diff = (to - from) % twoPi;
+  if (diff > math.pi) diff -= twoPi;
+  return diff;
 }
 
 class _CompassPainter extends CustomPainter {
@@ -41,11 +155,19 @@ class _CompassPainter extends CustomPainter {
   final TextStyle labelStyle;
   final bool useArabicLabels;
 
+  /// 0 at rest, 1 fully "locked on Qibla" -- crossfades needle/hub color.
+  final double alignFraction;
+
+  /// 0..1 progress of the one-shot lock-burst ring; inert at 0.
+  final double lockProgress;
+
   const _CompassPainter({
     required this.angle,
     required this.surface,
     required this.labelStyle,
     required this.useArabicLabels,
+    required this.alignFraction,
+    required this.lockProgress,
   });
 
   @override
@@ -166,15 +288,26 @@ class _CompassPainter extends CustomPainter {
     // Dark at the tail fading to a light highlight at the tip in light
     // theme; reversed in dark theme -- never a flat single fill, and never
     // just inherited so it stays legible on the sage widget/dark surfaces.
+    // As alignFraction rises toward 1, every stop lerps toward the same
+    // locked terracotta -- a gradient that degenerates into a flat fill --
+    // so the "locked on" cue crossfades in instead of hard-cutting, while
+    // still reading as a clear, unambiguous color change once settled, same
+    // idea as the competitor app's Kaaba icon turning solid blue when facing
+    // Qibla.
     final tailColor = isDark ? AppTheme.accent2_100 : AppTheme.accent900;
     final tipColor = isDark ? AppTheme.accent900 : AppTheme.accent2_100;
+    const lockedColor = AppTheme.accent700;
     canvas.drawPath(
       bladePath,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [tailColor, AppTheme.accent, tipColor],
+          colors: [
+            Color.lerp(tailColor, lockedColor, alignFraction)!,
+            Color.lerp(AppTheme.accent, lockedColor, alignFraction)!,
+            Color.lerp(tipColor, lockedColor, alignFraction)!,
+          ],
           stops: const [0, 0.55, 1],
         ).createShader(Rect.fromLTWH(-12 * s, -80 * s, 24 * s, 134 * s)),
     );
@@ -185,11 +318,31 @@ class _CompassPainter extends CustomPainter {
       center,
       faceRadius * 0.14,
       Paint()
-        ..color = AppTheme.accent900
+        ..color = Color.lerp(AppTheme.accent900, AppTheme.accent700, alignFraction)!
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.4,
     );
-    canvas.drawCircle(center, faceRadius * 0.05, Paint()..color = AppTheme.accent);
+    canvas.drawCircle(
+      center,
+      faceRadius * 0.05,
+      Paint()..color = Color.lerp(AppTheme.accent, AppTheme.accent700, alignFraction)!,
+    );
+
+    // The lock-burst: a ring expanding out from the hub and fading as it
+    // grows, fired once on the moment the needle settles onto Qibla.
+    if (lockProgress > 0 && lockProgress < 1) {
+      final radiusT = Curves.easeOutCubic.transform(lockProgress);
+      final fadeT = Curves.easeIn.transform(lockProgress);
+      final ringRadius = faceRadius * 0.16 + (faceRadius * 0.82 - faceRadius * 0.16) * radiusT;
+      canvas.drawCircle(
+        center,
+        ringRadius,
+        Paint()
+          ..color = AppTheme.accent700.withValues(alpha: (1 - fadeT) * 0.8)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3 * s,
+      );
+    }
   }
 
   void _drawLabel(Canvas canvas, String text, Offset pos) {
@@ -225,5 +378,7 @@ class _CompassPainter extends CustomPainter {
       oldDelegate.angle != angle ||
       oldDelegate.surface != surface ||
       oldDelegate.labelStyle != labelStyle ||
-      oldDelegate.useArabicLabels != useArabicLabels;
+      oldDelegate.useArabicLabels != useArabicLabels ||
+      oldDelegate.alignFraction != alignFraction ||
+      oldDelegate.lockProgress != lockProgress;
 }

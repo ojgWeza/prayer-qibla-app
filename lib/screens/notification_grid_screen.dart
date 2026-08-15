@@ -152,7 +152,7 @@ class _GridCell extends StatelessWidget {
             borderRadius: const BorderRadius.all(Radius.circular(8)),
           ),
           child: enabled
-              ? Icon(Icons.check, size: 18, color: colorScheme.primary)
+              ? Icon(Icons.check_rounded, size: 18, color: colorScheme.primary)
               : null,
         ),
       ),

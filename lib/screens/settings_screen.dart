@@ -130,7 +130,7 @@ class SettingsScreen extends StatelessWidget {
         ),
         ListTile(
           title: Text(AppStrings.of(context, 'customizeByDay')),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: const Icon(Icons.chevron_right_rounded),
           onTap: onCustomizeByDay,
         ),
         const Divider(height: 32),

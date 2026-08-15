@@ -448,7 +448,7 @@ class _HomeShellState extends State<HomeShell> {
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Icon(
-              isDark ? Icons.dark_mode : Icons.light_mode,
+              isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
               color: theme.colorScheme.outline,
             ),
           ),
@@ -470,7 +470,7 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.place_outlined,
+                    Icon(Icons.place_rounded,
                         size: 18, color: AppTheme.accent700),
                     const SizedBox(width: 6),
                     Expanded(
@@ -505,15 +505,15 @@ class _HomeShellState extends State<HomeShell> {
         onDestinationSelected: (i) => setState(() => _tabIndex = i),
         destinations: [
           NavigationDestination(
-            icon: const Icon(Icons.access_time),
+            icon: const Icon(Icons.access_time_rounded),
             label: AppStrings.of(context, 'tabPrayerTimes'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.explore),
+            icon: const Icon(Icons.explore_rounded),
             label: AppStrings.of(context, 'tabQibla'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_rounded),
             label: AppStrings.of(context, 'tabSettings'),
           ),
         ],

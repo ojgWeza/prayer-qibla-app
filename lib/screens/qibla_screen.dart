@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 
 import '../l10n/app_strings.dart';
@@ -44,6 +45,14 @@ class _QiblaScreenState extends State<QiblaScreen> {
       (widget.debugCompassStreamOverride ?? FlutterCompass.events)
           ?.timeout(const Duration(seconds: 4));
 
+  // How close (in degrees) heading must be to the qibla bearing to count as
+  // "facing Qibla" -- mirrors the competitor app's Kaaba-icon-turns-blue
+  // threshold rather than requiring an exact 0 diff, which the magnetometer
+  // never holds still enough to hit.
+  static const double _alignmentThresholdDegrees = 5;
+
+  bool _wasAligned = false;
+
   @override
   Widget build(BuildContext context) {
     if (widget.locationState == LocationState.denied ||
@@ -55,7 +64,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.location_off, size: 48),
+              const Icon(Icons.location_off_rounded, size: 48),
               const SizedBox(height: 16),
               Text(
                 AppStrings.of(context, 'locationDenied'),
@@ -109,18 +118,35 @@ class _QiblaScreenState extends State<QiblaScreen> {
               }
               // QiblaCompass's needle is built pointing straight up (toward
               // the tip) at angle == 0, and canvas.rotate() turns clockwise
-              // for positive radians. The bearing-minus-heading delta
-              // (no sign flip) was tried first and reasoned to be correct
-              // from the rotation math alone, but the user confirmed live
-              // on-device that it still pointed the wrong way (commit
-              // 901c109's needle-shape fix made the ambiguous-tip bug
-              // visible, which is what surfaced this). flutter_compass's
-              // `heading` is degrees clockwise from north same as the qibla
-              // bearing, so in theory delta = bearing - heading should be
-              // the clockwise angle to turn through -- but the live result
-              // says the opposite sign is what actually lands on Qibla, so
-              // trust the device over the derivation here.
-              final angle = (heading - qiblaBearing) * pi / 180;
+              // for positive radians. flutter_compass's `heading` is degrees
+              // clockwise from north, same convention as the qibla bearing,
+              // so the screen angle of an absolute direction D while the
+              // phone faces `heading` is D - heading (turn the phone
+              // clockwise and every absolute-direction marker swings
+              // counterclockwise on screen, like a real compass card).
+              // Confirmed 2026-08-10 against a competitor app's rotating-ring
+              // qibla compass photographed on the same Mi 10: its
+              // fixed-bearing marker visibly moved counterclockwise on
+              // screen as the ring (driven by device heading) rotated
+              // clockwise, matching bearing - heading, not heading - bearing.
+              // A prior session's live 90 deg-turn test was misread as
+              // confirming heading - qiblaBearing; that formula actually
+              // predicts the needle rotating the *same* direction as the
+              // phone, which contradicts the observed counterclockwise
+              // rotation for a clockwise turn -- so this flips the sign back.
+              final angle = (qiblaBearing - heading) * pi / 180;
+
+              // Normalize the raw bearing-minus-heading diff into -180..180
+              // before comparing to the threshold, so e.g. heading=359,
+              // bearing=1 (a 2 deg diff) doesn't read as a 358 deg miss.
+              final rawDiff = (qiblaBearing - heading) % 360;
+              final diff = rawDiff > 180 ? rawDiff - 360 : rawDiff;
+              final isAligned = diff.abs() <= _alignmentThresholdDegrees;
+              if (isAligned && !_wasAligned) {
+                HapticFeedback.mediumImpact();
+              }
+              _wasAligned = isAligned;
+
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -130,7 +156,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 24),
-                    QiblaCompass(angle: angle, language: widget.language),
+                    QiblaCompass(
+                      angle: angle,
+                      language: widget.language,
+                      isAligned: isAligned,
+                    ),
                     const SizedBox(height: 24),
                     Text('${qiblaBearing.toStringAsFixed(0)}°'),
                     const SizedBox(height: 12),

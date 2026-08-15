@@ -202,40 +202,63 @@ class _PrayerRow extends StatelessWidget {
     final highlightBg = isDark ? AppTheme.accent900 : AppTheme.accent100;
     final highlightBorder = isDark ? AppTheme.accent700 : AppTheme.accent300;
     final highlightText = isDark ? AppTheme.accent100 : AppTheme.accent700;
-    return Card(
-      color: highlighted ? highlightBg : null,
-      shape: highlighted
-          ? RoundedRectangleBorder(
-              borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
-              side: BorderSide(color: highlightBorder),
-            )
-          : null,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        title: Text(
-          label,
-          style: highlighted
-              ? theme.textTheme.titleMedium?.copyWith(
-                  color: isDark ? AppTheme.accent100 : null,
-                )
-              : theme.textTheme.titleMedium,
+    // Matches CardTheme's own rest-state tokens (app_theme.dart) so the
+    // animated version below looks identical to a plain Card when unhighlighted.
+    final restBg = theme.colorScheme.surface;
+    final restBorder = theme.colorScheme.outline;
+    const highlightDuration = Duration(milliseconds: 200);
+    const highlightCurve = Curves.easeOut;
+    final titleStyle = highlighted
+        ? theme.textTheme.titleMedium?.copyWith(
+            color: isDark ? AppTheme.accent100 : null,
+          )
+        : theme.textTheme.titleMedium;
+    final trailingStyle = highlighted
+        ? theme.textTheme.titleLarge?.copyWith(
+            color: isDark ? AppTheme.accent100 : null,
+          )
+        : theme.textTheme.titleLarge;
+    // Which row is "next" can change instantly (a settings edit reshuffles
+    // it, or a prayer time passes while the app is open) -- an AnimatedContainer
+    // (Card's color/shape aren't implicitly animatable) plus AnimatedDefaultTextStyle
+    // keep the background/border and text colors crossfading together instead
+    // of one snapping ahead of the other.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: AnimatedContainer(
+        duration: highlightDuration,
+        curve: highlightCurve,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: highlighted ? highlightBg : restBg,
+          borderRadius: const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
+          border: Border.all(color: highlighted ? highlightBorder : restBorder),
         ),
-        trailing: Text(
-          timeStr,
-          style: highlighted
-              ? theme.textTheme.titleLarge?.copyWith(
-                  color: isDark ? AppTheme.accent100 : null,
-                )
-              : theme.textTheme.titleLarge,
+        child: Material(
+          color: Colors.transparent,
+          child: ListTile(
+            title: AnimatedDefaultTextStyle(
+              duration: highlightDuration,
+              curve: highlightCurve,
+              style: titleStyle ?? const TextStyle(),
+              child: Text(label),
+            ),
+            trailing: AnimatedDefaultTextStyle(
+              duration: highlightDuration,
+              curve: highlightCurve,
+              style: trailingStyle ?? const TextStyle(),
+              child: Text(timeStr),
+            ),
+            subtitle: highlighted
+                ? Text(
+                    remainingText == null
+                        ? AppStrings.of(context, 'nextPrayer')
+                        : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
+                    style: theme.textTheme.bodySmall?.copyWith(color: highlightText),
+                  )
+                : null,
+          ),
         ),
-        subtitle: highlighted
-            ? Text(
-                remainingText == null
-                    ? AppStrings.of(context, 'nextPrayer')
-                    : '${AppStrings.of(context, 'nextPrayer')} — $remainingText',
-                style: theme.textTheme.bodySmall?.copyWith(color: highlightText),
-              )
-            : null,
       ),
     );
   }
@@ -253,7 +276,7 @@ class _PermissionMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.location_off, size: 48),
+            const Icon(Icons.location_off_rounded, size: 48),
             const SizedBox(height: 16),
             Text(
               AppStrings.of(context, 'locationDenied'),

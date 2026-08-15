@@ -55,6 +55,10 @@ class _PrayerQiblaAppState extends State<PrayerQiblaApp> {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: _themeMode,
+      // Default curve is linear; easeInOut reads less mechanical for the one
+      // moment the whole screen recolors (the afterMaghrib auto dark-mode
+      // flip).
+      themeAnimationCurve: Curves.easeInOut,
       home: HomeShell(
         onLocaleChanged: _setLocale,
         onThemeModeChanged: _setThemeMode,
