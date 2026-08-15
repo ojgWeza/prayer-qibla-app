@@ -54,6 +54,11 @@ class _HomeShellState extends State<HomeShell> {
   /// Name of the manually picked city, or null while using GPS.
   String? _manualLocationName;
 
+  /// True while showing the no-location-ever-chosen Cairo fallback, so its
+  /// label can be re-resolved in the current language on every build instead
+  /// of being frozen in whatever language was active when it was first set.
+  bool _usingDefaultLocation = false;
+
   String _language = 'ar';
   bool _use24HourFormat = true;
   String _calculationMethod = 'egyptian';
@@ -135,7 +140,7 @@ class _HomeShellState extends State<HomeShell> {
     // GPS or a specific city explicitly via the location picker.
     _latitude = _defaultLatitude;
     _longitude = _defaultLongitude;
-    _manualLocationName = AppStrings.forLanguage(_language, 'defaultLocationName');
+    _usingDefaultLocation = true;
     if (mounted) setState(() => _locationState = LocationState.granted);
     _recomputeTimesAndQibla();
   }
@@ -151,6 +156,7 @@ class _HomeShellState extends State<HomeShell> {
 
     _latitude = position.latitude;
     _longitude = position.longitude;
+    _usingDefaultLocation = false;
     await _prefs.setCachedGpsLocation(position.latitude, position.longitude);
     _recomputeTimesAndQibla();
   }
@@ -164,6 +170,7 @@ class _HomeShellState extends State<HomeShell> {
 
     _latitude = position.latitude;
     _longitude = position.longitude;
+    _usingDefaultLocation = false;
     await _prefs.setCachedGpsLocation(position.latitude, position.longitude);
     _recomputeTimesAndQibla();
   }
@@ -285,12 +292,16 @@ class _HomeShellState extends State<HomeShell> {
         _latitude = manual.latitude;
         _longitude = manual.longitude;
         _manualLocationName = manual.name;
+        _usingDefaultLocation = false;
         _locationState = LocationState.granted;
       });
       _recomputeTimesAndQibla();
     } else if (result is UseGpsLocation) {
       await _prefs.clearManualLocation();
-      setState(() => _manualLocationName = null);
+      setState(() {
+        _manualLocationName = null;
+        _usingDefaultLocation = false;
+      });
       await _refreshLocation();
     }
   }
@@ -380,7 +391,10 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final locationLabel = _manualLocationName ??
-        AppStrings.of(context, 'currentLocationLabel');
+        AppStrings.of(
+          context,
+          _usingDefaultLocation ? 'defaultLocationName' : 'currentLocationLabel',
+        );
 
     final screens = [
       PrayerTimesScreen(
