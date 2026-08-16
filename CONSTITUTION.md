@@ -197,14 +197,44 @@ session doesn't pay the same cost.
 - `adhan_dart`: `Qibla.qibla(coordinates)` returns the bearing directly; `PrayerTimes`
   takes `CalculationParameters` from `CalculationMethodParameters.<method>()`.
 - **`adhan_dart`'s `PrayerTimes.fajr`/`.sunrise`/`.dhuhr`/`.asr`/`.maghrib`/`.isha` are
-  UTC-flagged `DateTime` objects** (see its `TimeComponents.dart`, which builds them via
-  `DateTime.utc(...)`). Always call `.toLocal()` before displaying `.hour`/`.minute` —
-  `computePrayerTimes()` in `prayer_times_service.dart` now does this. Missing it means
-  every prayer time displays shifted by the local UTC offset (caught live: Cairo,
-  UTC+2, showed Fajr two hours early). Comparisons (`isBefore`/`isAfter`) and
-  `package:timezone`'s `TZDateTime.from(...)` are unaffected either way, since both
-  operate on the underlying instant regardless of the `isUtc` flag — only on-screen
-  digits were ever wrong, not next-prayer detection or notification scheduling.
+  UTC-flagged `DateTime` objects, and they are genuinely correct absolute instants —
+  not a bug to route around, a labeling quirk to convert to display.** Confirmed by
+  reading `TimeComponents.dart`/`SolarTime.dart` from the pub-cache source directly:
+  `SolarTime`'s Julian-day calculation and `TimeComponents.utcDate()`'s final
+  `DateTime.utc(year, month, day, hours, minutes, seconds)` both consistently use the
+  same passed-in `date.year/date.month/date.day` (the *local* calendar digits of
+  whatever `DateTime` was passed to `computePrayerTimes`), paired with an
+  `hours/minutes/seconds` that's a genuinely-correct UTC time-of-day from the
+  astronomical formulas — so the resulting object really is the right point in
+  universal time, just rendered with the wrong day's-digits-as-if-UTC label. Because
+  of that, **`computePrayerTimes()` in `prayer_times_service.dart` can freely choose
+  which timezone to render it in**, by wrapping with `package:timezone`'s
+  `TZDateTime.from(utcInstant, location)` instead of `.toLocal()`. Comparisons
+  (`isBefore`/`isAfter`/`difference`) are unaffected either way, since both operate on
+  the underlying instant regardless of what zone a `DateTime`/`TZDateTime` is labeled
+  with — only on-screen digits change.
+  - **v1 (2026-08-05, PR #5)**: always called `.toLocal()` — fixed prayer times
+    displaying in raw UTC (caught live: Cairo, UTC+2, showed Fajr two hours early).
+    Correct for "prayer times where I am" (GPS location always matches the device's
+    own timezone there), but silently wrong for a manually-searched distant city,
+    since `.toLocal()` can only ever use the *device's* system timezone.
+  - **v2 (2026-08-16)**: `computePrayerTimes()` now resolves the *prayer location's
+    own* IANA timezone from its lat/long via `lat_lng_to_timezone`'s
+    `latLngToTimezoneString()` — a small pure-Dart offline polygon lookup (hardcoded
+    data, no network/data files, chosen over a network timezone API specifically to
+    keep matching the "no backend of our own" principle below), then renders through
+    `tz.TZDateTime.from(...)` in that resolved `tz.Location` (falling back to
+    `.toLocal()` only if the lookup returns `"unknown"` or the zone name fails to
+    resolve). Fixes the "manual city search shows the device's timezone, not the
+    searched city's" bug (a Cairo device searching London showed Dhuhr 2 hours off
+    from real London solar noon) with **no changes needed at any call site** — the
+    fix lives entirely inside `computePrayerTimes()` since every caller already
+    passes the location's own lat/long. Known residual: the calendar *date* used for
+    the calculation still comes from the device's `DateTime.now()`, not the target
+    city's; a genuine day-boundary edge case near midnight remains unfixed.
+  - `lat_lng_to_timezone` itself hasn't been republished in ~5 years — worth
+    rechecking whether it still compiles cleanly (`flutter pub get`) if the Dart SDK
+    jumps a major version; it resolved without issue against 3.44.8/Dart 3.12.2.
 
 ### Android home screen widgets (RemoteViews)
 - **A `TextView` whose width is expanded via `layout_weight` will right-align Arabic
@@ -673,6 +703,14 @@ session doesn't pay the same cost.
   emulator/device installs for changes that actually need a device** (GPS, compass,
   widget, notifications, ads) or a final combined re-verification before merging a
   batch of fixes — not for routine Dart-only UI/logic changes.
+  - **This rule doesn't survive a context clear on its own — read it, don't assume
+    it.** Later the same day (2026-08-16), a fresh context window (after `/clear`)
+    dispatched a manual CI build to verify two already-web-verifiable Dart fixes
+    before checking this file or `TODO.md`. The user caught it immediately ("AGAIN
+    you are building!!!!"); the run was cancelled and the web loop was used properly
+    instead. A global (cross-project) Claude memory now also carries this rule so it
+    surfaces even outside this repo, but that's a backstop, not a substitute for
+    actually reading this section before reaching for CI.
 - **Flutter web can be used purely as a verification tool for the real app's actual
   rendering — do this instead of trusting a hand-maintained HTML mockup, which *will*
   drift from the real Dart code no matter how carefully it's kept in sync.** Added via

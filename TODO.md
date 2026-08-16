@@ -307,29 +307,64 @@ emulator came online):
    builds + emulator/device installs for changes that actually need a device**
    (GPS, compass, widget, notifications, ads) or for a final combined
    re-verification before merging a batch — not for routine Dart-only fixes.
-5. [ ] **New bug found, deliberately NOT fixed this session (user's call,
-   2026-08-15): prayer times for a manually-searched city display in the
-   *device's* timezone, not the *searched city's* timezone.** Repro: device
-   timezone `Africa/Cairo` (UTC+3), manually search+select a city in a different
-   timezone (tested: London, UTC+1 in August/BST) via the worldwide city search —
-   Dhuhr displayed as 3:06 PM, while real London solar noon in mid-August is
-   ~1:05 PM local London time. Off by exactly the Cairo↔London UTC offset gap (2h).
-   Root cause: `computePrayerTimes()` correctly computes UTC solar-event instants
-   for the searched city's coordinates, but display conversion calls `.toLocal()`,
-   which converts using the **device's** system timezone — correct for the
-   original "prayer times where I am" case (device timezone always matches GPS
-   location there) but silently wrong for the explicitly-advertised "manual city
-   search... for any city worldwide" feature (see Done ✅ list), since checking a
-   distant city's prayer times while physically elsewhere is the obvious real use
-   case for that feature. **Not a quick fix** — needs a real capability the app
-   doesn't have: resolving an IANA timezone from lat/long (Nominatim's basic
-   search doesn't return one). Options for whoever picks this up: bundle a
-   lat/long→timezone boundary lookup package (adds a dependency + bundle size, but
-   stays fully on-device, consistent with the "no backend of our own" principle),
-   or call a timezone API (conflicts with that principle, needs a network call
-   beyond the existing once-per-search Nominatim call). Scope this properly with
-   the user before starting — flagged via `AskUserQuestion` this session, user
-   chose "log it, fix later" over scoping a fix immediately.
+5. [x] **Manual-city-search timezone bug — fixed (2026-08-16).** Original repro
+   (2026-08-15): device timezone `Africa/Cairo` (UTC+3), manually search+select a
+   city in a different timezone (London, UTC+1 in August/BST) — Dhuhr displayed
+   as 3:06 PM, while real London solar noon in mid-August is ~1:05 PM local
+   London time. Root cause (confirmed then): `computePrayerTimes()` correctly
+   computes UTC solar-event instants for the searched city's coordinates, but
+   display conversion called `.toLocal()`, which converts using the **device's**
+   system timezone — correct for "prayer times where I am" (device timezone
+   always matches GPS location there) but wrong for a manually-searched distant
+   city. Logged then rather than fixed immediately — needed a real capability
+   the app didn't have (lat/long → IANA timezone resolution) and the two ways to
+   get it (bundle an offline package vs. call a network API) trade off against
+   each other, so the user deferred the choice.
+   **Scoped and fixed this session**: asked the user to choose between the two
+   paths via `AskUserQuestion`, framed against the concrete tradeoffs (offline
+   package: matches the "no backend of our own" principle but the only
+   real option found, `lat_lng_to_timezone`, hasn't been published in ~5 years;
+   network API: more accurate/maintained but breaks the no-backend principle and
+   adds a network dependency to city search). **User chose the offline package.**
+   Verified it resolves cleanly against the current Dart SDK (`flutter pub get`
+   succeeded, no version conflicts) before committing to it.
+   Implementation, entirely inside `computePrayerTimes()`
+   (`lib/services/prayer_times_service.dart`) — no call-site changes needed
+   anywhere else in the app: added `_resolveDisplayLocation(lat, lng)`, which
+   uses `lat_lng_to_timezone`'s offline `latLngToTimezoneString()` (a hardcoded
+   polygon lookup, no network/data files) to get the IANA zone name for the
+   *prayer location's* coordinates (not the device's), then resolves it via the
+   `timezone` package (already a dependency, used elsewhere for notification
+   scheduling) into a `tz.Location`. adhan_dart's raw UTC-flagged output is a
+   correct absolute instant (confirmed by reading its `TimeComponents.dart`/
+   `SolarTime.dart` source: the Julian-day calc and the final UTC-labeling both
+   consistently use the same passed-in calendar date, so no internal
+   inconsistency) — display now renders that instant via `tz.TZDateTime.from()`
+   in the resolved location instead of blanket `.toLocal()`, falling back to
+   `.toLocal()` only if the lookup returns `"unknown"` (coordinates outside its
+   coverage) or the zone name fails to resolve. `DateTime` comparisons elsewhere
+   in the app (`_nextPrayerKey`, countdown math) stay correct regardless, since
+   `isAfter`/`isBefore`/`difference` operate on the absolute instant, not the
+   zone a `DateTime`/`TZDateTime` happens to be labeled with.
+   New regression test in `test/widget_test.dart`: computes prayer times for
+   London on a fixed BST reference date and asserts `times.dhuhr.timeZoneOffset
+   == const Duration(hours: 1)` — deliberately checks the returned value's own
+   offset rather than a wall-clock string, so the test is independent of
+   whatever timezone the machine running it happens to be in.
+   `flutter analyze` + `dart run custom_lint` + `flutter test` (9/9) all green.
+   **Live-verified via the free `flutter run -d web-server` loop** (no CI/device
+   build): searched "City of London, United Kingdom" from a Cairo-timezone
+   session — Dhuhr now shows **13:06** (correct BST solar noon), not the
+   previously-reported 15:06 (device/Cairo time). Exact match to the original
+   bug report's numbers.
+   **Known residual limitation, out of scope for this fix**: the calendar date
+   used for the calculation still comes from the **device's** `DateTime.now()`,
+   not the target city's own current date — near a midnight boundary where the
+   two disagree (e.g. it's already tomorrow in a searched city while the device
+   says today), the computed day could be off by one. The reported bug was a
+   same-day, off-by-exact-UTC-offset problem, which this fix fully resolves;
+   the day-boundary edge case is a separate, smaller residual worth flagging if
+   anyone reports it live.
 6. [ ] **Two low-severity cosmetic findings from this session's QA pass, not
    fixed (too minor to justify a build cycle, revisit if touching the same
    files):**
@@ -358,11 +393,32 @@ and the dropdown fix (both already pushed, part of that PR). Everything from the
 default-location fix onward (items 3–4 above) was moved to a **new branch**,
 **`fix/qa-session-dropdown-location-compass`**, per the "one branch per feature"
 rule and the user's explicit call this session — these are unrelated bug fixes
-found via QA, not part of the widget feature. That new branch was **not yet
-pushed or built via CI as of this note** — next session (or later this one):
-push it, dispatch a CI build, and do one combined install+re-verify pass on the
-emulator covering the location-label and compass fixes on real Android (only
-web-verified so far), not four separate build cycles.
+found via QA, not part of the widget feature. That branch **is now pushed**
+(confirmed up to date with origin later the same 2026-08-15 day, in a fresh
+context window after a `/clear`) — the earlier "not yet pushed" note above was
+stale by the time it was acted on.
+**Items 3–4 re-confirmed live a second time**, via the same free
+`flutter run -d web-server --web-port 8765` + Claude-in-Chrome loop, in that
+later fresh-context continuation of the same day: default-location label
+follows Settings → Language instantly in both directions (English "Cairo,
+Egypt" ⇄ Arabic "القاهرة، مصر" in both the app-bar pill and the Settings
+Location row), and the Qibla screen shows "Your device has no compass sensor"
+immediately instead of spinning. **The CI-avoidance rule from item 4 above had
+to be re-learned the hard way in that same continuation**: the fresh instance
+dispatched a manual `workflow_dispatch` CI build (`Build APK #38`) to verify
+these same two already-web-verifiable fixes before checking this file's own
+guidance; the user called it out sharply ("AGAIN you are building!!!!"), the
+run was cancelled mid-flight, and the web-loop verification above was done
+properly instead. A standing memory
+(`feedback_no_ci_for_small_changes`, global) was added afterward specifically
+because this was the second time the rule had to be stated — check it before
+reaching for CI/device verification on any Dart-only change. **Real
+CI/Android/emulator verification for this branch is still genuinely
+outstanding** — not done in either session — and per the reinforced rule,
+should happen as one combined pass (bundled with anything else pending, e.g.
+the still-open qibla sign-flip re-verification below) right before merging,
+not dispatched proactively for Dart-only fixes that the web loop already
+covers.
 
 *(Resolved, kept for history: the hookify `hooks.json` path-escaping bug and `gh` auth
 that a 2026-08-12 session was blocked on are both fixed/confirmed — `gh` has been used
@@ -844,17 +900,43 @@ Not started yet).
       2026-08-06.)
 
 ### Medium
-- [ ] **Bug: "next prayer" highlight on the Prayer Times screen is sometimes wrong**
-      (reported live: Fajr hadn't been called yet, but Dhuhr was highlighted as next).
-      `_nextPrayerKey()` in `lib/screens/prayer_times_screen.dart` itself looks correct
-      (walks `fajr → sunrise(skipped) → dhuhr → …`, returns the first one still in the
-      future) — the likely real cause is upstream, in `_recomputeTimesAndQibla()`
-      (`lib/screens/home_shell.dart`): `_prayerTimes` is only ever recomputed when
-      location/settings change or on app bootstrap, **not** on a day rollover. Needs:
-      (1) confirm this reproduces (note the exact device time + location when it
-      happens next), and (2) recompute `_prayerTimes` when the calendar date changes
-      while the app is running/resumed. Also worth double-checking the resolved
-      location wasn't stale/wrong at the time (see the GPS-caching item below).
+- [x] **Bug: "next prayer" highlight on the Prayer Times screen is sometimes
+      wrong — investigated and fixed (2026-08-15).** Original report (2026-08-06,
+      "Fajr hadn't been called yet, but Dhuhr was highlighted as next") predated
+      several since-landed fixes (UTC/local conversion, GPS caching, the Cairo
+      default-location fallback, the midnight-rollover recompute) and could not be
+      reproduced as originally described. Investigation via `/investigate` found a
+      real, concretely-reproducible bug in the same area instead: `_nextPrayerKey()`
+      in `lib/screens/prayer_times_screen.dart` only ever looks inside the single
+      day's `times.ordered` list (today's 6 entries) — `home_shell.dart`'s
+      `_recomputeTimesAndQibla()` already computes a full 7-day `upcomingDays` list
+      for notification scheduling, but only ever passed `upcomingDays.first` (today)
+      down to the screen, discarding the rest. So **after Isha and before midnight**,
+      every one of today's entries is in the past, `_nextPrayerKey()` returns `null`,
+      and the screen shows **no highlight and no countdown at all** — even though
+      there plainly is a next prayer (tomorrow's Fajr). Confirmed live via the
+      Flutter-web loop at the actual real-world reproduction instant (23:12 Cairo
+      time, after Isha): no row was highlighted before the fix.
+      Fixed by threading a `nextDayFajr` value through: `home_shell.dart` now stores
+      `_nextDayFajr = upcomingDays[1].fajr` alongside `_prayerTimes` in the same
+      `setState()`, and passes it to `PrayerTimesScreen` as a new required
+      `nextDayFajr` param. In `prayer_times_screen.dart`'s `build()`, when
+      `_nextPrayerKey()` finds nothing left today, it rolls over to `nextKey='fajr'`
+      / `nextTime=widget.nextDayFajr` instead of leaving both null; the Fajr row's
+      displayed clock time is also overridden to `nextDayFajr` in that specific case
+      (not today's already-passed value) so the digits shown match the actual next
+      occurrence. Matching by `entry.key == nextKey` still can't double-highlight
+      today's own (already-past) Fajr row, since the two cases are mutually
+      exclusive (`rolledOverToTomorrow` is only true when nothing today qualifies).
+      New `test/prayer_times_screen_test.dart` (2 cases: rollover, and a normal
+      same-day highlight unaffected by the change) — confirmed the rollover test
+      fails to even compile against the pre-fix widget (proves the widget genuinely
+      lacked this capability, not just a logic tweak) and passes with the fix.
+      `flutter analyze` + `dart run custom_lint` + `flutter test` (10/10) all green.
+      **Live-verified via the free `flutter run -d web-server` loop** (no CI/device
+      build) at the real after-Isha instant: Fajr row now shows "Next prayer — 5
+      hours & 29 minutes remaining" with the correct tomorrow's clock time (04:49),
+      instead of nothing.
 - [ ] **Add swipe navigation between the 3 main tabs** (Prayer Times / Qibla /
       Settings), not just the bottom `NavigationBar`. `HomeShell`
       (`lib/screens/home_shell.dart`) currently renders the 3 screens in an

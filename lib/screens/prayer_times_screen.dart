@@ -12,6 +12,7 @@ import '../widgets/banner_ad_widget.dart';
 class PrayerTimesScreen extends StatefulWidget {
   final LocationState locationState;
   final DailyPrayerTimes? times;
+  final DateTime? nextDayFajr;
   final String language;
   final bool use24HourFormat;
   final Future<void> Function() onRetryLocation;
@@ -20,6 +21,7 @@ class PrayerTimesScreen extends StatefulWidget {
     super.key,
     required this.locationState,
     required this.times,
+    required this.nextDayFajr,
     required this.language,
     required this.use24HourFormat,
     required this.onRetryLocation,
@@ -78,17 +80,22 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       );
     }
 
-    final nextKey = _nextPrayerKey(times);
+    // After Isha, none of today's entries are still ahead -- the next
+    // prayer is tomorrow's Fajr, which isn't in `times.ordered` at all
+    // (that list only ever holds a single calendar day). Roll over to it
+    // rather than showing no highlight/countdown until midnight.
+    final todayNextKey = _nextPrayerKey(times);
+    final rolledOverToTomorrow = todayNextKey == null && widget.nextDayFajr != null;
+    final nextKey = todayNextKey ?? (widget.nextDayFajr == null ? null : 'fajr');
     final today = DateTime.now();
-    final remainingText = nextKey == null
+    final nextTime = rolledOverToTomorrow
+        ? widget.nextDayFajr
+        : (nextKey == null
+            ? null
+            : times.ordered.firstWhere((entry) => entry.key == nextKey).value);
+    final remainingText = nextTime == null
         ? null
-        : _formatRemaining(
-            context,
-            times.ordered
-                .firstWhere((entry) => entry.key == nextKey)
-                .value
-                .difference(today),
-          );
+        : _formatRemaining(context, nextTime.difference(today));
 
     return Column(
       children: [
@@ -106,7 +113,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                 for (final entry in times.ordered)
                   _PrayerRow(
                     label: AppStrings.of(context, entry.key),
-                    time: entry.value,
+                    time: rolledOverToTomorrow && entry.key == nextKey
+                        ? nextTime!
+                        : entry.value,
                     highlighted: entry.key == nextKey,
                     use24HourFormat: widget.use24HourFormat,
                     remainingText:

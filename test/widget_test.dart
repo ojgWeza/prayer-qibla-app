@@ -42,5 +42,24 @@ void main() {
       expect(times.asr.isBefore(times.maghrib), isTrue);
       expect(times.maghrib.isBefore(times.isha), isTrue);
     });
+
+    // Regression test for a real bug found live (manual city search showed
+    // prayer times in the *device's* timezone instead of the *searched
+    // city's* -- e.g. a Cairo device searching London showed Dhuhr ~2 hours
+    // off from real London solar noon). Asserts against the returned
+    // TZDateTime's own `.timeZoneOffset`, which is independent of whichever
+    // timezone the machine running this test happens to be in.
+    test('renders times in the searched location\'s own timezone, not the '
+        'machine running the calculation', () {
+      final times = computePrayerTimes(
+        latitude: 51.5074,
+        longitude: -0.1278, // London
+        date: DateTime(2026, 8, 1), // BST (UTC+1) is in effect
+        methodKey: 'egyptian',
+        madhabKey: 'shafi',
+      );
+
+      expect(times.dhuhr.timeZoneOffset, const Duration(hours: 1));
+    });
   });
 }

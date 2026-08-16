@@ -48,6 +48,7 @@ class _HomeShellState extends State<HomeShell> {
   double? _latitude;
   double? _longitude;
   DailyPrayerTimes? _prayerTimes;
+  DateTime? _nextDayFajr;
   double? _qiblaBearing;
   DateTime? _prayerTimesDate;
 
@@ -195,6 +196,7 @@ class _HomeShellState extends State<HomeShell> {
 
     setState(() {
       _prayerTimes = upcomingDays.first;
+      _nextDayFajr = upcomingDays[1].fajr;
       _qiblaBearing = bearing;
       _prayerTimesDate = DateTime(today.year, today.month, today.day);
     });
@@ -400,6 +402,7 @@ class _HomeShellState extends State<HomeShell> {
       PrayerTimesScreen(
         locationState: _locationState,
         times: _prayerTimes,
+        nextDayFajr: _nextDayFajr,
         language: _language,
         use24HourFormat: _use24HourFormat,
         onRetryLocation: _refreshLocation,
