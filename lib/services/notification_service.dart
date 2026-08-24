@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -35,10 +35,14 @@ class NotificationService {
 
   Future<void> requestPermission() async {
     if (kIsWeb) return;
-    await _plugin
+    final android = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+            AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
+    // Android 14+ no longer grants SCHEDULE_EXACT_ALARM by default on fresh
+    // installs -- without this, every zonedSchedule call below throws
+    // exact_alarms_not_permitted and silently cancels all scheduling.
+    await android?.requestExactAlarmsPermission();
   }
 
   Future<void> cancelAll() {
@@ -84,14 +88,21 @@ class NotificationService {
         if (!isEnabled(weekday, entry.key)) continue;
         final scheduled = tz.TZDateTime.from(entry.value, tz.local);
         if (scheduled.isBefore(now)) continue;
-        await _plugin.zonedSchedule(
-          id: id++,
-          scheduledDate: scheduled,
-          title: labelFor(entry.key),
-          body: labelFor(entry.key),
-          notificationDetails: details,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
+        try {
+          await _plugin.zonedSchedule(
+            id: id++,
+            scheduledDate: scheduled,
+            title: labelFor(entry.key),
+            body: labelFor(entry.key),
+            notificationDetails: details,
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          );
+        } catch (e) {
+          // If the user denied the exact-alarm permission (or revoked it
+          // later), don't let one failed prayer abort scheduling for every
+          // other prayer/day in this window.
+          debugPrint('NotificationService: failed to schedule $id: $e');
+        }
       }
     }
   }
