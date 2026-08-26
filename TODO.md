@@ -195,6 +195,24 @@ is done — move it into "Done" rather than leaving it ambiguous.
       `flutter analyze` + `dart run custom_lint` + `flutter test` all green.
       **Not yet live-verified** — needs either the new local emulator (blocked, see
       below) or the Mi 10.
+- [x] **Fixed prayer notifications not firing at all, on any prayer (2026-08-23)** —
+      user report: "nothing happened on any prayer time." Root-caused by reading
+      `flutter_local_notifications`' Java source directly, not guessing: the app never
+      requested `SCHEDULE_EXACT_ALARM` (only `POST_NOTIFICATIONS`), and Android 14+
+      doesn't grant that permission by default on a fresh install. Every
+      `zonedSchedule(..., androidScheduleMode: exactAllowWhileIdle)` call threw
+      `exact_alarms_not_permitted`, uncaught, aborting the whole scheduling loop on the
+      very first prayer of the very first day — silently, since the call site
+      (`home_shell.dart`'s `_rescheduleNotifications`) is fire-and-forget. Fixed in
+      `notification_service.dart`: `requestPermission()` now also calls
+      `requestExactAlarmsPermission()`, and each `zonedSchedule()` call is wrapped in
+      try/catch so one denial can't silently cancel every other prayer/day. Full
+      write-up in `LESSONS.md` under "Third-party packages". `flutter analyze` +
+      `flutter test` green (`custom_lint` currently broken locally for an unrelated,
+      pre-existing reason — see the CI Flutter-version-drift lesson, which now also
+      reproduces locally since the local Flutter SDK moved to 3.47.0). **Not yet
+      live-verified on a device** — this directly informs the still-open item below
+      about confirming notifications fire on a real device.
 
 ## In progress / needs attention right now 🔄
 
@@ -593,7 +611,12 @@ above, still pending.)*
 ---
 
 - [ ] Confirm the 7-day rolling notification schedule actually fires correctly on a
-      real device (so far only verified by static analysis/tests, not a live run)
+      real device (so far only verified by static analysis/tests, not a live run).
+      **Higher priority now**: this was previously not firing at all on Android 14+
+      due to the missing exact-alarm permission (see Done ✅, 2026-08-23) — needs a
+      real device to confirm the fix actually resolves it, including that the
+      `requestExactAlarmsPermission()` Settings hand-off is a tolerable first-run flow
+      and not just theoretically correct.
 - [ ] Re-test pull-to-refresh on the Prayer Times screen actually recomputes times after
       a real location change on-device (added in PR #3, not yet exercised live)
 - [x] **Widget visual redesign — rebuilt to actually match the mockup, not just
